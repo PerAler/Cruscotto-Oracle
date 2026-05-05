@@ -1,0 +1,1 @@
+# Cruscotto Oracle 1.0 Stable\n\nData freeze: 2026-05-05\n\n## Stato fissato\n- Editor SQL in modalita textarea singola (no overlay)\n- Drift di allineamento in scroll eliminato\n- Shortcut editor attive: Tab, Shift+Tab, Invio auto-indent, Ctrl+/ comment toggle\n- UI editor con caret/selezione/focus migliorati\n\n## Versione applicativa\n- Maven project version: 1.0.0\n

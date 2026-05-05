@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="it" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cruscotto Procedure Oracle</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css">
+    <link rel="stylesheet" th:href="@{/dashboard.css(v=${#temporals.format(#temporals.createNow(), 'yyyyMMddHHmmss')})}">
+</head>
+<body>
+<div class="bg-shape shape-a"></div>
+<div class="bg-shape shape-b"></div>
+<div id="busyOverlay" class="busy-overlay" aria-hidden="true">
+    <div class="busy-box" role="status" aria-live="polite">
+        <span class="busy-spinner" aria-hidden="true"></span>
+        <p>Elaborazione in corso...</p>
+    </div>
+</div>
+
+<header class="hero">
+    <h1>Cruscotto Procedure Oracle</h1>
+    <p>Esegui script SQL da file, passa parametri e pianifica job con cron.</p>
+    <p>
+        Istanza PID <strong th:text="${runtimePid}"></strong>
+        avviata alle
+        <strong th:text="${#temporals.format(runtimeStartedAt, 'dd/MM/yyyy HH:mm:ss')}"></strong>
+    </p>
+</header>
+
+<main class="layout">
+    <section class="card messages" th:if="${successMessage != null or errorMessage != null}">
+        <p class="ok" th:if="${successMessage != null}" th:text="${successMessage}"></p>
+        <p class="ko" th:if="${errorMessage != null}" th:text="${errorMessage}"></p>
+    </section>
+
+    <section class="stats-grid">
+        <a href="/logs" target="_blank" rel="noopener" class="card stat-card stat-link" title="Apri finestra Log totali">
+            <p class="stat-label">Log totali</p>
+            <p class="stat-value" th:text="${logs.size()}">0</p>
+        </a>
+        <a href="/logs?status=OK" target="_blank" rel="noopener" class="card stat-card stat-ok stat-link" title="Apri finestra Log OK">
+            <p class="stat-label">Esecuzioni OK</p>
+            <p class="stat-value" th:text="${okCount}">0</p>
+        </a>
+        <a href="/errors" target="_blank" rel="noopener" class="card stat-card stat-ko stat-link" title="Apri finestra Errori attivi">
+            <p class="stat-label">Errori attivi</p>
+            <p class="stat-value" th:text="${errorCount}">0</p>
+        </a>
+        <article class="card stat-card stat-output">
+            <p class="stat-label">Output HTML</p>
+            <p class="stat-value" th:text="${outputCount}">0</p>
+        </article>
+    </section>
+
+    <section class="card">
+        <div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap;margin-bottom:0.5rem">
+            <h2 style="margin:0">Selezione Script SQL</h2>
+            <a href="/editor"
+               style="display:inline-block;background:#05668d;color:#fff;border-radius:7px;padding:0.35rem 0.9rem;font-size:0.85rem;font-weight:600;text-decoration:none">
+                ✦ Apri Editor dedicato
+            </a>
+        </div>
+        <form method="get" action="/" class="form-block" id="scriptSelectionForm">
+            <label for="selectedProcedure">Script presente in src/main/resources/sql</label>
+            <input type="text" id="scriptFilter" placeholder="Filtra script...">
+            <select id="selectedProcedure" name="selectedProcedure">
+                <option th:each="procOption : ${allProcedures}"
+                        th:value="${procOption.name()}"
+                        th:text="${procOption.name()}"
+                        th:selected="${procOption.name() == selectedProcedure}"></option>
+            </select>
+            <noscript>
+                <button type="submit">Mostra</button>
+            </noscript>
+        </form>
+
+        <form method="post" th:action="@{/catalog/reload}" class="form-block">
+            <input type="hidden" name="selectedProcedure" th:value="${selectedProcedure}">
+            <button type="submit">Ricarica Catalogo SQL</button>
+        </form>
+
+        <h2 th:text="${!procedures.isEmpty() ? procedures[0].scriptType() + ' Selezionato' : 'Selezionato'}">Selezionato</h2>
+        <div class="procedure-grid" th:if="${!procedures.isEmpty()}">
+            <article class="procedure" th:each="proc : ${procedures}">
+                <h3><span class="script-type-badge" th:text="${proc.scriptType()}"></span> <span th:text="${proc.name()}"></span></h3>
+                <p class="meta">File: <span th:text="${proc.resourcePath()}"></span></p>
+
+                <div class="params" th:if="${!proc.parameterNames().isEmpty()}">
+                    <h4>Parametri disponibili</h4>
+                    <ul>
+                        <li th:each="paramName : ${proc.parameterNames()}">
+                            <span class="param-name" th:text="${paramName}"></span>
+                            <span class="param-desc" th:if="${proc.paramDescription(paramName) != null}" th:text="${' - ' + proc.paramDescription(paramName)}"></span>
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="execution-modes">
+                    <form th:action="@{'/run/' + ${proc.name()}}" method="post" class="form-block execution-col">
+                        <h4>Esecuzione Immediata</h4>
+                        <input type="hidden" name="selectedProcedure" th:value="${proc.name()}">
+
+                        <div th:each="paramName : ${proc.parameterNames()}">
+                            <label th:for="${'run_' + proc.name() + '_' + paramName}" th:text="${paramName}"></label>
+                            <input type="text" th:id="${'run_' + proc.name() + '_' + paramName}" th:name="${'p_' + paramName}">
+                        </div>
+                        <button type="submit">Esegui Ora</button>
+                    </form>
+
+                    <form th:action="@{'/schedule/' + ${proc.name()}}" method="post" class="form-block execution-col schedule">
+                        <h4>Schedulazione Cron</h4>
+                        <input type="hidden" name="selectedProcedure" th:value="${proc.name()}">
+
+                        <label th:for="${'cron_' + proc.name()}">Cron</label>
+                        <input type="text" th:id="${'cron_' + proc.name()}" name="cron" placeholder="0 0/30 * * * *" required>
+
+                        <div th:each="paramName : ${proc.parameterNames()}">
+                            <label th:for="${'sched_' + proc.name() + '_' + paramName}" th:text="${paramName + ' (sched)'}"></label>
+                            <input type="text" th:id="${'sched_' + proc.name() + '_' + paramName}" th:name="${'p_' + paramName}">
+                        </div>
+
+                        <button type="submit">Salva Schedulazione</button>
+                    </form>
+
+                    <form th:action="@{'/schedule-once/' + ${proc.name()}}" method="post" class="form-block execution-col schedule-once">
+                        <h4>Lancio Singolo</h4>
+                        <input type="hidden" name="selectedProcedure" th:value="${proc.name()}">
+
+                        <label th:for="${'runAt_' + proc.name()}">Data e ora locale</label>
+                        <input type="datetime-local" th:id="${'runAt_' + proc.name()}" name="runAt" required>
+
+                        <div th:each="paramName : ${proc.parameterNames()}">
+                            <label th:for="${'once_' + proc.name() + '_' + paramName}" th:text="${paramName + ' (once)'}"></label>
+                            <input type="text" th:id="${'once_' + proc.name() + '_' + paramName}" th:name="${'p_' + paramName}">
+                        </div>
+
+                        <button type="submit">Pianifica Lancio Singolo</button>
+                    </form>
+                </div>
+
+                <form th:action="@{'/schedule/' + ${proc.name()} + '/cancel'}" method="post" class="cancel-form">
+                    <input type="hidden" name="selectedProcedure" th:value="${proc.name()}">
+                    <button type="submit" class="cancel">Annulla Schedulazione</button>
+                </form>
+            </article>
+        </div>
+        <p th:if="${procedures.isEmpty()}">Nessun file SQL trovato in <strong>src/main/resources/sql</strong>.</p>
+    </section>
+
+    <section class="card">
+        <h2>Schedulazioni Attive</h2>
+        <table>
+            <thead>
+            <tr>
+                <th>Procedura</th>
+                <th>Tipo</th>
+                <th>Pianificazione</th>
+                <th>Parametri</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="job : ${jobs}">
+                <td th:text="${job.procedureName()}"></td>
+                <td th:text="${job.scheduleType()}"></td>
+                <td th:text="${job.scheduleExpression()}"></td>
+                <td th:text="${job.parameters()}"></td>
+            </tr>
+            <tr th:if="${jobs.isEmpty()}">
+                <td colspan="3">Nessuna schedulazione attiva.</td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+
+
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-sql.min.js"></script>
+<script>
+    (function () {
+        var STORAGE_KEY = "cruscotto.selectedProcedure";
+        var form = document.getElementById("scriptSelectionForm");
+        var selector = document.getElementById("selectedProcedure");
+        var filter = document.getElementById("scriptFilter");
+        var queryLabel = document.getElementById("queryLabel");
+        var queryFileName = document.getElementById("queryFileName");
+        var sqlText = document.getElementById("sqlText");
+        var queryParams = document.getElementById("queryParams");
+        var loadSelectedScript = document.getElementById("loadSelectedScript");
+        var selectedScriptSql = document.getElementById("selectedScriptSql");
+        var busyOverlay = document.getElementById("busyOverlay");
+        var isBusy = false;
+        var SQL_EDITOR_KEY = "cruscotto.sqlEditor.query";
+        var SQL_PARAMS_KEY = "cruscotto.sqlEditor.params";
+        var SQL_LABEL_KEY = "cruscotto.sqlEditor.label";
+        var SQL_FILE_KEY = "cruscotto.sqlEditor.file";
+        var SQL_BETA_MODE_KEY = "cruscotto.sqlEditor.betaEnabled";
+        var sqlBetaShell = document.getElementById("sqlBetaShell");
+        var sqlPreviewPanel = document.getElementById("sqlPreviewPanel");
+        var sqlPreviewCode = document.getElementById("sqlPreviewCode");
+        var sqlActiveLineMarker = document.getElementById("sqlActiveLineMarker");
+        var sqlEditPanel = document.getElementById("sqlEditPanel");
+        var sqlLineEditor = document.getElementById("sqlLineEditor");
+        var sqlApplyLine = document.getElementById("sqlApplyLine");
+        var toggleBetaMode = document.getElementById("toggleBetaMode");
+        var sqlActiveLine = document.getElementById("sqlActiveLine");
+        var activeLineIndex = 0;
+        var hasActiveLine = false;
+        // Stable mode: force classic editor to avoid preview click misalignment.
+        var betaEnabled = false;
+        localStorage.setItem(SQL_BETA_MODE_KEY, "false");
+
+        function setBusy() {
+            if (isBusy) {
+                return;
+            }
+            isBusy = true;
+            document.body.classList.add("is-busy");
+            if (busyOverlay) {
+                busyOverlay.setAttribute("aria-hidden", "false");
+            }
+
+            document.querySelectorAll("button, select, input[type='submit']").forEach(function (el) {
+                el.disabled = true;
+            });
+
+            if (selector) {
+                selector.disabled = true;
+            }
+            if (filter) {
+                filter.disabled = true;
+            }
+        }
+
+        if (!form || !selector) {
+            return;
+        }
+
+        var currentFromServer = selector.value;
+        var stored = localStorage.getItem(STORAGE_KEY);
+        if (stored && stored !== currentFromServer) {
+            var existing = Array.from(selector.options).find(function (opt) {
+                return opt.value === stored;
+            });
+            if (existing) {
+                selector.value = stored;
+                form.submit();
+                return;
+            }
+        }
+
+        selector.addEventListener("change", function () {
+            localStorage.setItem(STORAGE_KEY, selector.value);
+            form.submit();
+        });
+
+        document.querySelectorAll("form").forEach(function (currentForm) {
+            currentForm.addEventListener("submit", function () {
+                if (currentForm.id !== "scriptSelectionForm") {
+                    setBusy();
+                }
+            });
+        });
+
+        window.addEventListener("pageshow", function () {
+            isBusy = false;
+            document.body.classList.remove("is-busy");
+            if (busyOverlay) {
+                busyOverlay.setAttribute("aria-hidden", "true");
+            }
+            document.querySelectorAll("button, select, input[type='submit']").forEach(function (el) {
+                el.disabled = false;
+            });
+            if (toggleBetaMode) {
+                toggleBetaMode.disabled = true;
+            }
+            if (filter) {
+                filter.disabled = false;
+            }
+        });
+
+        if (filter) {
+            filter.addEventListener("input", function () {
+                var q = filter.value.toLowerCase().trim();
+                Array.from(selector.options).forEach(function (opt) {
+                    var visible = q.length === 0 || opt.text.toLowerCase().includes(q);
+                    opt.hidden = !visible;
+                });
+            });
+        }
+
+        if (queryLabel) {
+            queryLabel.value = localStorage.getItem(SQL_LABEL_KEY) || "";
+            queryLabel.addEventListener("input", function () {
+                localStorage.setItem(SQL_LABEL_KEY, queryLabel.value);
+            });
+        }
+
+        if (queryFileName) {
+            queryFileName.value = localStorage.getItem(SQL_FILE_KEY) || "";
+            queryFileName.addEventListener("input", function () {
+                localStorage.setItem(SQL_FILE_KEY, queryFileName.value);
+            });
+        }
+
+        if (sqlText) {
+            sqlText.value = localStorage.getItem(SQL_EDITOR_KEY) || sqlText.value;
+            renderPreview();
+
+            function persistSqlEditor() {
+                localStorage.setItem(SQL_EDITOR_KEY, sqlText.value);
+            }
+
+            function getLines() {
+                return sqlText.value.split("\n");
+            }
+
+            function renderPreview() {
+                if (!sqlPreviewCode) {
+                    return;
+                }
+                var text = sqlText.value || "";
+                sqlPreviewCode.textContent = text;
+                if (window.Prism && window.Prism.highlightElement) {
+                    window.Prism.highlightElement(sqlPreviewCode);
+                }
+                updateActiveLineMarker();
+            }
+
+            function getPreviewMetrics() {
+                if (!sqlPreviewPanel) {
+                    return {
+                        lineHeight: 22,
+                        contentTop: 0
+                    };
+                }
+
+                var preEl = sqlPreviewPanel.querySelector("pre");
+                var codeEl = sqlPreviewPanel.querySelector("code");
+
+                if (!preEl || !codeEl) {
+                    return {
+                        lineHeight: 22,
+                        contentTop: 0
+                    };
+                }
+
+                var panelStyle = window.getComputedStyle(sqlPreviewPanel);
+                var preStyle = window.getComputedStyle(preEl);
+                var codeStyle = window.getComputedStyle(codeEl);
+                var lineHeight = parseFloat(codeStyle.lineHeight) || 22;
+                
+                var panelPaddingTop = parseFloat(panelStyle.paddingTop) || 0;
+                var prePaddingTop = parseFloat(preStyle.paddingTop) || 0;
+                var contentTop = preEl.offsetTop + panelPaddingTop + prePaddingTop;
+
+                return {
+                    lineHeight: lineHeight,
+                    contentTop: contentTop
+                };
+            }
+
+            function updateActiveLineMarker() {
+                if (!sqlActiveLineMarker || !sqlPreviewPanel || !betaEnabled || !hasActiveLine) {
+                    if (sqlActiveLineMarker) {
+                        sqlActiveLineMarker.hidden = true;
+                    }
+                    return;
+                }
+
+                var metrics = getPreviewMetrics();
+                var lineHeight = metrics.lineHeight;
+                var top = metrics.contentTop + (activeLineIndex * lineHeight) - sqlPreviewPanel.scrollTop;
+
+                if (top < 0 || top > sqlPreviewPanel.clientHeight - lineHeight) {
+                    sqlActiveLineMarker.hidden = true;
+                    return;
+                }
+                sqlActiveLineMarker.style.top = top + "px";
+                sqlActiveLineMarker.style.height = lineHeight + "px";
+                sqlActiveLineMarker.hidden = false;
+            }
+
+            function applyEditorMode() {
+                if (!sqlBetaShell || !sqlText) {
+                    return;
+                }
+                sqlBetaShell.hidden = !betaEnabled;
+                sqlText.classList.toggle("source-hidden", betaEnabled);
+                sqlText.classList.toggle("source-visible", !betaEnabled);
+                if (!betaEnabled) {
+                    sqlText.focus();
+                } else {
+                    renderPreview();
+                    if (sqlLineEditor && hasActiveLine) {
+                        sqlLineEditor.focus();
+                    }
+                }
+                if (toggleBetaMode) {
+                    toggleBetaMode.textContent = "Editor classico (stabile)";
+                    toggleBetaMode.disabled = true;
+                }
+                localStorage.setItem(SQL_BETA_MODE_KEY, "false");
+            }
+
+            function openEditPanelForLine(lineIndex) {
+                if (!sqlLineEditor || !sqlPreviewPanel || !sqlBetaShell) {
+                    return;
+                }
+
+                var lines = getLines();
+                if (!lines.length) {
+                    lines = [""];
+                }
+
+                hasActiveLine = true;
+                activeLineIndex = Math.max(0, Math.min(lineIndex, lines.length - 1));
+                sqlLineEditor.value = lines[activeLineIndex] || "";
+
+                if (sqlActiveLine) {
+                    sqlActiveLine.textContent = String(activeLineIndex + 1);
+                }
+
+                sqlLineEditor.focus();
+                sqlLineEditor.selectionStart = sqlLineEditor.value.length;
+                sqlLineEditor.selectionEnd = sqlLineEditor.value.length;
+                updateActiveLineMarker();
+            }
+
+            function updateActiveLine() {
+                if (!hasActiveLine) {
+                    return;
+                }
+                var lines = getLines();
+                if (!lines.length) {
+                    lines = [""];
+                }
+                activeLineIndex = Math.max(0, Math.min(activeLineIndex, lines.length - 1));
+                lines[activeLineIndex] = sqlLineEditor.value;
+
+                sqlText.value = lines.join("\n");
+                persistSqlEditor();
+                renderPreview();
+            }
+
+            function applyLineAndKeepOpen() {
+                updateActiveLine();
+                sqlLineEditor.focus();
+            }
+
+            sqlText.addEventListener("input", function () {
+                persistSqlEditor();
+                renderPreview();
+            });
+
+            if (sqlPreviewPanel) {
+                sqlPreviewPanel.addEventListener("click", function (event) {
+                    if (!betaEnabled) {
+                        return;
+                    }
+
+                    var preEl = sqlPreviewPanel.querySelector("pre");
+                    var codeEl = sqlPreviewPanel.querySelector("code");
+                    if (!preEl || !codeEl) {
+                        return;
+                    }
+
+                    var codeStyle = window.getComputedStyle(codeEl);
+                    var lineHeight = parseFloat(codeStyle.lineHeight) || 22;
+                    var preRect = preEl.getBoundingClientRect();
+                    var preStyle = window.getComputedStyle(preEl);
+                    var prePaddingTop = parseFloat(preStyle.paddingTop) || 0;
+                    var firstLineY = preRect.top + prePaddingTop;
+                    var clickedLine = Math.floor((event.clientY - firstLineY) / lineHeight);
+
+                    openEditPanelForLine(clickedLine);
+                });
+
+                sqlPreviewPanel.addEventListener("scroll", function () {
+                    updateActiveLineMarker();
+                });
+            }
+
+            if (sqlLineEditor) {
+                sqlLineEditor.addEventListener("input", function () {
+                    updateActiveLine();
+                });
+
+                sqlLineEditor.addEventListener("keydown", function (e) {
+                    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                        e.preventDefault();
+                        applyLineAndKeepOpen();
+                        return;
+                    }
+
+                    if ((e.ctrlKey || e.metaKey) && e.key === "/") {
+                        e.preventDefault();
+                        var current = sqlLineEditor.value;
+                        if (/^\s*--/.test(current)) {
+                            sqlLineEditor.value = current.replace(/^(\s*)--\s?/, "$1");
+                        } else {
+                            sqlLineEditor.value = current.replace(/^(\s*)/, "$1-- ");
+                        }
+                        updateActiveLine();
+                    }
+                });
+            }
+
+            if (sqlApplyLine) {
+                sqlApplyLine.addEventListener("click", function () {
+                    applyLineAndKeepOpen();
+                });
+            }
+
+            if (toggleBetaMode) {
+                toggleBetaMode.disabled = true;
+            }
+
+            applyEditorMode();
+        }
+
+        if (queryParams) {
+            queryParams.value = localStorage.getItem(SQL_PARAMS_KEY) || "";
+            queryParams.addEventListener("input", function () {
+                localStorage.setItem(SQL_PARAMS_KEY, queryParams.value);
+            });
+        }
+
+        if (loadSelectedScript && selectedScriptSql && sqlText) {
+            loadSelectedScript.addEventListener("click", function () {
+                var content = selectedScriptSql.value || "";
+                if (!content.trim()) {
+                    return;
+                }
+                sqlText.value = content;
+                localStorage.setItem(SQL_EDITOR_KEY, sqlText.value);
+                if (sqlPreviewCode) {
+                    sqlPreviewCode.textContent = sqlText.value;
+                    if (window.Prism && window.Prism.highlightElement) {
+                        window.Prism.highlightElement(sqlPreviewCode);
+                    }
+                }
+                if (typeof updateActiveLineMarker === "function") {
+                    updateActiveLineMarker();
+                }
+                
+                // Extract parameters from SQL (format: :paramName)
+                var paramRegex = /:[a-zA-Z_]\w*/g;
+                var matches = content.match(paramRegex);
+                var params = [];
+                if (matches) {
+                    var seen = {};
+                    matches.forEach(function(match) {
+                        var paramName = match.substring(1); // Remove the colon
+                        if (!seen[paramName]) {
+                            params.push(paramName + "=");
+                            seen[paramName] = true;
+                        }
+                    });
+                }
+                
+                if (params.length > 0) {
+                    queryParams.value = params.join("\n");
+                    localStorage.setItem(SQL_PARAMS_KEY, queryParams.value);
+                }
+            });
+        }
+
+    })();
+</script>
+</body>
+</html>
+
+

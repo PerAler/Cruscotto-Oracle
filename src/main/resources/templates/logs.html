@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="it" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log Totali - Cruscotto Procedure Oracle</title>
+    <link rel="stylesheet" th:href="@{/dashboard.css}">
+</head>
+<body>
+<div class="bg-shape shape-a"></div>
+<div class="bg-shape shape-b"></div>
+
+<header class="hero">
+    <h1>Log Totali</h1>
+    <p>Vista completa dei log di esecuzione in finestra dedicata.</p>
+    <p>
+        Istanza PID <strong th:text="${runtimePid}"></strong>
+        avviata alle
+        <strong th:text="${#temporals.format(runtimeStartedAt, 'dd/MM/yyyy HH:mm:ss')}"></strong>
+    </p>
+</header>
+
+<main class="layout">
+    <section class="card">
+        <a href="/" class="btn-back">← Torna al Dashboard</a>
+    </section>
+
+    <section class="card">
+        <h2>Log Esecuzioni</h2>
+        <div class="log-toolbar" th:if="${!allLogs.isEmpty()}">
+            <input type="text" id="logFilterText" placeholder="Filtra per procedura o messaggio...">
+            <select id="logFilterStatus">
+                <option value="" th:selected="${logStatusFilter == null or logStatusFilter == ''}">Tutti gli stati</option>
+                <option value="OK" th:selected="${logStatusFilter == 'OK'}">Solo OK</option>
+                <option value="KO" th:selected="${logStatusFilter == 'KO'}">Solo KO</option>
+                <option value="HAS_OUTPUT" th:selected="${logStatusFilter == 'HAS_OUTPUT'}">Solo con output HTML</option>
+            </select>
+            <p id="logFilterCounter" class="log-counter"></p>
+        </div>
+
+        <table>
+            <thead>
+            <tr>
+                <th>Timestamp</th>
+                <th>Procedura</th>
+                <th>Esito</th>
+                <th>Durata</th>
+                <th>Messaggio</th>
+                <th>Parametri</th>
+                <th>Output</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="log : ${allLogs}"
+                class="log-row"
+                th:attr="data-procedure=${log.procedureName()},data-status=${log.status()},data-message=${log.message()},data-has-output=${log.outputHtmlFile() != null}">
+                <td th:text="${log.timestamp()}"></td>
+                <td th:text="${log.procedureName()}"></td>
+                <td th:text="${log.status()}" th:classappend="${log.status() == 'OK'} ? 'badge-ok' : 'badge-ko'"></td>
+                <td th:text="${log.durationMs() + ' ms'}"></td>
+                <td th:text="${log.message()}"></td>
+                <td th:text="${log.parameters()}"></td>
+                <td>
+                    <div th:if="${log.outputHtmlFile() != null}" class="output-links">
+                        <a th:href="@{'/output/' + ${log.outputHtmlFile()}}" target="_blank" class="output-link">HTML</a>
+                        <a th:href="@{'/output/download/' + ${#strings.replace(log.outputHtmlFile(), '.html', '.csv')}}" class="output-link secondary-link">CSV</a>
+                        <a th:href="@{'/output/download/' + ${#strings.replace(log.outputHtmlFile(), '.html', '.xlsx')}}" class="output-link secondary-link">XLSX</a>
+                    </div>
+                    <span th:if="${log.outputHtmlFile() == null}" class="no-output">—</span>
+                </td>
+            </tr>
+            <tr th:if="${allLogs.isEmpty()}">
+                <td colspan="7">Nessun log disponibile.</td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+</main>
+
+<script>
+    (function () {
+        var logFilterText = document.getElementById("logFilterText");
+        var logFilterStatus = document.getElementById("logFilterStatus");
+        var logFilterCounter = document.getElementById("logFilterCounter");
+
+        function applyLogFilters() {
+            var rows = Array.from(document.querySelectorAll(".log-row"));
+            if (!rows.length) {
+                if (logFilterCounter) {
+                    logFilterCounter.textContent = "0 log visibili";
+                }
+                return;
+            }
+
+            var textQuery = logFilterText ? logFilterText.value.toLowerCase().trim() : "";
+            var statusQuery = logFilterStatus ? logFilterStatus.value : "";
+            var visibleCount = 0;
+
+            rows.forEach(function (row) {
+                var procedure = (row.dataset.procedure || "").toLowerCase();
+                var message = (row.dataset.message || "").toLowerCase();
+                var status = row.dataset.status || "";
+                var hasOutput = row.dataset.hasOutput === "true";
+
+                var matchesText = !textQuery || procedure.includes(textQuery) || message.includes(textQuery);
+                var matchesStatus = !statusQuery
+                    || (statusQuery === "HAS_OUTPUT" && hasOutput)
+                    || status === statusQuery;
+                var visible = matchesText && matchesStatus;
+
+                row.hidden = !visible;
+                if (visible) {
+                    visibleCount++;
+                }
+            });
+
+            if (logFilterCounter) {
+                logFilterCounter.textContent = visibleCount + " log visibili";
+            }
+        }
+
+        if (logFilterText) {
+            logFilterText.addEventListener("input", applyLogFilters);
+        }
+        if (logFilterStatus) {
+            logFilterStatus.addEventListener("change", applyLogFilters);
+        }
+        applyLogFilters();
+    })();
+</script>
+</body>
+</html>

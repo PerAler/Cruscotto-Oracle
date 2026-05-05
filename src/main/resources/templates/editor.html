@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="it" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editor SQL — Cruscotto Oracle</title>
+    <link rel="stylesheet" th:href="@{/dashboard.css}">
+    <style>
+        /* ── Layout pagina editor ────────────────────────────────────────── */
+        .editor-layout {
+            width: min(1280px, 97vw);
+            margin: 0 auto 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .editor-topbar {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            flex-wrap: wrap;
+        }
+
+        .editor-topbar select {
+            flex: 1 1 200px;
+            max-width: 420px;
+        }
+
+        /* ── Editor SQL con numeri di riga ───────────────────────────────── */
+        .sql-editor-wrap {
+            display: flex;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            overflow: hidden;
+            background: #1d1f21;
+            font-family: 'Consolas', 'Cascadia Code', 'Courier New', monospace;
+            font-size: 0.85rem;
+            line-height: 1.55;
+            min-height: 280px;
+            max-height: 520px;
+            resize: vertical;
+        }
+
+        .line-numbers {
+            background: #252729;
+            color: #636c72;
+            padding: 0.75rem 0.4rem 0.75rem 0.6rem;
+            text-align: right;
+            user-select: none;
+            white-space: pre;
+            overflow: hidden;
+            border-right: 1px solid #363a3d;
+            min-width: 2.8rem;
+            font-size: inherit;
+            line-height: inherit;
+            flex-shrink: 0;
+        }
+
+        #sqlEditor {
+            flex: 1;
+            background: #1d1f21;
+            color: #c5c8c6;
+            border: none;
+            outline: none;
+            padding: 0.75rem 0.75rem;
+            font-family: inherit;
+            font-size: inherit;
+            line-height: inherit;
+            resize: none;
+            white-space: pre;
+            overflow-wrap: normal;
+            overflow-x: auto;
+            overflow-y: auto;
+            tab-size: 4;
+            caret-color: #f0c040;
+        }
+
+        #sqlEditor::selection {
+            background: #4a5568;
+        }
+
+        /* ── Params editor ───────────────────────────────────────────────── */
+        .params-row {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.8rem;
+        }
+
+        @media (max-width: 720px) {
+            .params-row { grid-template-columns: 1fr; }
+        }
+
+        .field-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.3rem;
+        }
+
+        .field-group label {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #556;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .field-group input,
+        .field-group textarea,
+        .field-group select {
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            padding: 0.45rem 0.6rem;
+            font-family: inherit;
+            font-size: 0.875rem;
+            background: var(--panel);
+            color: var(--ink);
+        }
+
+        .field-group textarea {
+            font-family: 'Consolas', 'Cascadia Code', 'Courier New', monospace;
+            font-size: 0.8rem;
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        /* ── Action bar ──────────────────────────────────────────────────── */
+        .action-bar {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .action-bar .spacer { flex: 1; }
+
+        .btn {
+            border: none;
+            border-radius: 7px;
+            padding: 0.45rem 1.1rem;
+            font-weight: 600;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: filter 0.15s, transform 0.1s;
+            white-space: nowrap;
+        }
+
+        .btn:hover { filter: brightness(1.1); }
+        .btn:active { transform: scale(0.97); }
+        .btn:disabled { opacity: 0.45; cursor: default; filter: none; transform: none; }
+
+        .btn-run  { background: var(--accent); color: #fff; }
+        .btn-save { background: var(--ok); color: #fff; }
+        .btn-upd  { background: var(--warm); color: #fff; }
+        .btn-sec  { background: #e8e2d8; color: var(--ink); }
+
+        /* ── Messaggi ────────────────────────────────────────────────────── */
+        .msg-bar {
+            padding: 0.5rem 0.8rem;
+            border-radius: 7px;
+            font-size: 0.9rem;
+            display: none;
+        }
+        .msg-bar.ok  { background: #d4edda; color: #155724; display: block; }
+        .msg-bar.ko  { background: #f8d7da; color: #721c24; display: block; }
+
+        /* ── Pannello risultati ──────────────────────────────────────────── */
+        #resultPanel {
+            display: none;
+        }
+
+        .result-header {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .result-header h3 { margin: 0; font-size: 1rem; }
+
+        #resultFrame {
+            width: 100%;
+            min-height: 380px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #fff;
+        }
+
+        /* ── Header ──────────────────────────────────────────────────────── */
+        .page-header {
+            display: flex;
+            align-items: baseline;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .page-header h2 { margin: 0; }
+
+        .nav-back {
+            font-size: 0.85rem;
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        .nav-back:hover { text-decoration: underline; }
+
+        /* ── Badge script selezionato ────────────────────────────────────── */
+        .script-badge {
+            display: inline-block;
+            background: #e0f0f9;
+            color: var(--accent);
+            border-radius: 5px;
+            padding: 0.1rem 0.55rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            margin-left: 0.4rem;
+        }
+
+        /* ── Spinner inline ──────────────────────────────────────────────── */
+        .spin-inline {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 2px solid rgba(255,255,255,0.4);
+            border-top-color: #fff;
+            animation: spin 0.8s linear infinite;
+            vertical-align: middle;
+            margin-right: 0.3rem;
+            display: none;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+<div class="bg-shape shape-a"></div>
+<div class="bg-shape shape-b"></div>
+
+<header class="hero">
+    <h1>Editor SQL</h1>
+    <p>Componi, esegui e salva query SELECT direttamente su Oracle.</p>
+</header>
+
+<main class="editor-layout">
+
+    <!-- Messaggi (Thymeleaf, visibili dopo redirect) -->
+    <div th:if="${successMessage != null}" class="msg-bar ok" th:text="${successMessage}"></div>
+    <div th:if="${errorMessage != null}"  class="msg-bar ko" th:text="${errorMessage}"></div>
+
+    <!-- ── Card principale editor ─────────────────────────────────────────── -->
+    <section class="card">
+
+        <!-- Header card -->
+        <div class="page-header" style="margin-bottom:0.8rem">
+            <h2>
+                Script SQL
+                <span class="script-badge" id="currentScriptBadge"
+                      th:text="${selectedScript != null ? selectedScript : '(nuovo)'}"></span>
+            </h2>
+            <a href="/dashboard" class="nav-back">← Torna al Cruscotto</a>
+        </div>
+
+        <!-- Barra selezione script -->
+        <div class="editor-topbar" style="margin-bottom:0.8rem">
+            <label for="scriptSelect" style="font-size:0.82rem;font-weight:600;color:#556">Script:</label>
+            <select id="scriptSelect">
+                <option value="">(nessuno — nuovo script)</option>
+                <option th:each="proc : ${allProcedures}"
+                        th:value="${proc.name()}"
+                        th:text="${proc.name()}"
+                        th:selected="${proc.name() == selectedScript}"></option>
+            </select>
+            <button class="btn btn-sec" id="btnLoad" type="button">Carica ▼</button>
+            <button class="btn btn-sec" id="btnReloadCatalog" type="button" title="Ricarica catalogo SQL da disco">⟳ Catalogo</button>
+        </div>
+
+        <!-- Messaggio AJAX (visibile solo dopo esecuzione) -->
+        <div id="ajaxMsg" class="msg-bar" style="margin-bottom:0.6rem"></div>
+
+        <!-- ── Editor con numeri di riga ───────────────────────────────────── -->
+        <div class="sql-editor-wrap" id="editorWrap">
+            <div class="line-numbers" id="lineNumbers">1</div>
+            <textarea id="sqlEditor"
+                      spellcheck="false"
+                      autocorrect="off"
+                      autocapitalize="off"
+                      autocomplete="off"
+                      placeholder="-- Scrivi qui la tua query SELECT / WITH ..."
+                      th:text="${sqlContent}"></textarea>
+        </div>
+
+        <!-- ── Parametri e label ────────────────────────────────────────────── -->
+        <div class="params-row" style="margin-top:0.75rem">
+            <div class="field-group">
+                <label for="queryLabel">Etichetta query</label>
+                <input type="text" id="queryLabel" placeholder="es. Fatture 2024">
+            </div>
+            <div class="field-group">
+                <label for="saveNameInput">Nome file</label>
+                <input type="text" id="saveNameInput" placeholder="es. query_fatture">
+            </div>
+            <div class="field-group">
+                <label for="queryParams">Parametri bind (nome=valore, uno per riga)</label>
+                <textarea id="queryParams"
+                          placeholder="anno=2024&#10;applicazione=ALER"></textarea>
+            </div>
+        </div>
+
+        <!-- ── Barra azioni ─────────────────────────────────────────────────── -->
+        <div class="action-bar" style="margin-top:0.8rem">
+            <button class="btn btn-run" id="btnRun" type="button">
+                <span class="spin-inline" id="runSpinner"></span>
+                ▶ Esegui
+            </button>
+            <div class="spacer"></div>
+
+            <!-- Salva come nuovo script -->
+            <form id="formSave" method="post" action="/editor/save" style="display:inline;margin:0">
+                <input type="hidden" id="saveSqlText" name="sqlText">
+                <input type="hidden" id="saveQueryFileName" name="queryFileName">
+                <input type="hidden" id="saveQueryLabel" name="queryLabel">
+                <button class="btn btn-save" id="btnSave" type="button">💾 Salva nuovo</button>
+            </form>
+
+            <!-- Aggiorna script selezionato -->
+            <form id="formUpdate" method="post" action="/editor/update" style="display:inline;margin:0">
+                <input type="hidden" id="updateSqlText" name="sqlText">
+                <input type="hidden" id="updateSelectedScript" name="selectedScript">
+                <button class="btn btn-upd" id="btnUpdate" type="button"
+                        th:disabled="${selectedScript == null}">✏ Aggiorna script</button>
+            </form>
+        </div>
+
+    </section>
+
+    <!-- ── Pannello risultati ───────────────────────────────────────────────── -->
+    <section class="card" id="resultPanel">
+        <div class="result-header">
+            <h3>Risultati</h3>
+            <span id="resultMsg" style="font-size:0.85rem;color:#556"></span>
+            <span class="spacer" style="flex:1"></span>
+            <a id="resultOpenLink" href="#" target="_blank" rel="noopener"
+               style="font-size:0.82rem;color:var(--accent);display:none">Apri in finestra ↗</a>
+            <button class="btn btn-sec" id="btnCloseResult" type="button"
+                    style="padding:0.25rem 0.7rem;font-size:0.8rem">✕ Chiudi</button>
+        </div>
+        <iframe id="resultFrame" title="Risultato query"></iframe>
+    </section>
+
+</main>
+
+<script>
+(function () {
+    'use strict';
+
+    // ── Riferimenti DOM ──────────────────────────────────────────────────────
+    const sqlEditor       = document.getElementById('sqlEditor');
+    const lineNumbers     = document.getElementById('lineNumbers');
+    const scriptSelect    = document.getElementById('scriptSelect');
+    const currentBadge    = document.getElementById('currentScriptBadge');
+    const ajaxMsg         = document.getElementById('ajaxMsg');
+    const btnRun          = document.getElementById('btnRun');
+    const runSpinner      = document.getElementById('runSpinner');
+    const btnLoad         = document.getElementById('btnLoad');
+    const btnReloadCatalog= document.getElementById('btnReloadCatalog');
+    const btnSave         = document.getElementById('btnSave');
+    const btnUpdate       = document.getElementById('btnUpdate');
+    const saveNameInput   = document.getElementById('saveNameInput');
+    const queryParams     = document.getElementById('queryParams');
+    const resultPanel     = document.getElementById('resultPanel');
+    const resultFrame     = document.getElementById('resultFrame');
+    const resultMsg       = document.getElementById('resultMsg');
+    const resultOpenLink  = document.getElementById('resultOpenLink');
+    const btnCloseResult  = document.getElementById('btnCloseResult');
+
+    // ── Numeri di riga ───────────────────────────────────────────────────────
+    function updateLineNumbers() {
+        const lines = sqlEditor.value.split('\n').length;
+        let nums = '';
+        for (let i = 1; i <= lines; i++) nums += i + '\n';
+        lineNumbers.textContent = nums;
+        lineNumbers.scrollTop = sqlEditor.scrollTop;
+    }
+
+    function syncBindParamsFromSql() {
+        const matches = sqlEditor.value.match(/:[a-zA-Z_]\w*/g);
+        const params = [];
+        const seen = new Set();
+
+        if (matches) {
+            matches.forEach((match) => {
+                const paramName = match.substring(1);
+                if (!seen.has(paramName)) {
+                    seen.add(paramName);
+                    params.push(paramName + '=');
+                }
+            });
+        }
+
+        queryParams.value = params.join('\n');
+    }
+
+    sqlEditor.addEventListener('input', () => {
+        updateLineNumbers();
+        syncBindParamsFromSql();
+    });
+    sqlEditor.addEventListener('scroll', () => {
+        lineNumbers.scrollTop = sqlEditor.scrollTop;
+    });
+    sqlEditor.addEventListener('keydown', (e) => {
+        // Tab inserisce 4 spazi
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            const start = sqlEditor.selectionStart;
+            const end   = sqlEditor.selectionEnd;
+            sqlEditor.value = sqlEditor.value.substring(0, start) + '    ' + sqlEditor.value.substring(end);
+            sqlEditor.selectionStart = sqlEditor.selectionEnd = start + 4;
+            updateLineNumbers();
+            syncBindParamsFromSql();
+        }
+    });
+    updateLineNumbers();
+    syncBindParamsFromSql();
+
+    // Sincronizza altezza wrapper con textarea manuale resize
+    new ResizeObserver(() => {
+        lineNumbers.scrollTop = sqlEditor.scrollTop;
+    }).observe(sqlEditor);
+
+    // ── Carica script selezionato ────────────────────────────────────────────
+    btnLoad.addEventListener('click', () => {
+        const name = scriptSelect.value;
+        if (!name) {
+            sqlEditor.value = '';
+            currentBadge.textContent = '(nuovo)';
+            saveNameInput.value = '';
+            btnUpdate.disabled = true;
+            document.getElementById('updateSelectedScript').value = '';
+            updateLineNumbers();
+            syncBindParamsFromSql();
+            hideMsg();
+            return;
+        }
+        fetch('/editor/load-script?script=' + encodeURIComponent(name))
+            .then(r => r.ok ? r.json() : Promise.reject('Errore HTTP ' + r.status))
+            .then(data => {
+                sqlEditor.value = data.sqlText || '';
+                currentBadge.textContent = name;
+                saveNameInput.value = name;
+                updateLineNumbers();
+                syncBindParamsFromSql();
+                hideMsg();
+                // Aggiorna pulsante Update
+                btnUpdate.disabled = false;
+                document.getElementById('updateSelectedScript').value = name;
+            })
+            .catch(err => showMsg('Errore caricamento script: ' + err, false));
+    });
+
+    // ── Ricarica catalogo ────────────────────────────────────────────────────
+    btnReloadCatalog.addEventListener('click', () => {
+        const fd = new FormData();
+        fetch('/catalog/reload', { method: 'POST', body: fd })
+            .then(() => location.reload())
+            .catch(() => location.reload());
+    });
+
+    // ── Esegui query (AJAX) ──────────────────────────────────────────────────
+    btnRun.addEventListener('click', async () => {
+        const sql = sqlEditor.value.trim();
+        if (!sql) { showMsg('Inserisci una query SQL.', false); return; }
+
+        setRunning(true);
+        hideMsg();
+        resultPanel.style.display = 'none';
+
+        const fd = new FormData();
+        fd.append('sqlText',    sql);
+        fd.append('queryLabel', document.getElementById('queryLabel').value);
+        fd.append('queryParams', document.getElementById('queryParams').value);
+
+        try {
+            const resp = await fetch('/editor/execute', { method: 'POST', body: fd });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const data = await resp.json();
+
+            if (data.ok) {
+                showMsg(data.message, true);
+                if (data.outputUrl) {
+                    resultFrame.src = data.outputUrl;
+                    resultMsg.textContent = data.message;
+                    resultOpenLink.href = data.outputUrl;
+                    resultOpenLink.style.display = '';
+                    resultPanel.style.display = '';
+                    resultPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            } else {
+                showMsg(data.message, false);
+            }
+        } catch (err) {
+            showMsg('Errore di comunicazione: ' + err.message, false);
+        } finally {
+            setRunning(false);
+        }
+    });
+
+    // ── Salva nuovo script ───────────────────────────────────────────────────
+    btnSave.addEventListener('click', () => {
+        const sql = sqlEditor.value.trim();
+        if (!sql) { showMsg('Inserisci una query SQL da salvare.', false); return; }
+        const fileName = saveNameInput.value.trim();
+        if (!fileName) { showMsg('Specifica un nome file prima di salvare.', false); saveNameInput.focus(); return; }
+
+        document.getElementById('saveSqlText').value = sql;
+        document.getElementById('saveQueryFileName').value = fileName;
+        document.getElementById('saveQueryLabel').value = document.getElementById('queryLabel').value;
+        document.getElementById('formSave').submit();
+    });
+
+    // ── Aggiorna script esistente ────────────────────────────────────────────
+    btnUpdate.addEventListener('click', () => {
+        const sql = sqlEditor.value.trim();
+        if (!sql) { showMsg('Il testo SQL è vuoto.', false); return; }
+        const name = scriptSelect.value;
+        if (!name) { showMsg("Seleziona prima uno script dall'elenco.", false); return; }
+        if (!confirm('Sovrascrivere lo script "' + name + '" con il contenuto corrente?')) return;
+
+        document.getElementById('updateSqlText').value = sql;
+        document.getElementById('updateSelectedScript').value = name;
+        document.getElementById('formUpdate').submit();
+    });
+
+    // ── Chiudi risultati ─────────────────────────────────────────────────────
+    btnCloseResult.addEventListener('click', () => {
+        resultPanel.style.display = 'none';
+        resultFrame.src = 'about:blank';
+    });
+
+    // ── Utilità ──────────────────────────────────────────────────────────────
+    function showMsg(text, ok) {
+        ajaxMsg.textContent = text;
+        ajaxMsg.className = 'msg-bar ' + (ok ? 'ok' : 'ko');
+    }
+
+    function hideMsg() {
+        ajaxMsg.className = 'msg-bar';
+        ajaxMsg.textContent = '';
+    }
+
+    function setRunning(busy) {
+        btnRun.disabled = busy;
+        runSpinner.style.display = busy ? 'inline-block' : 'none';
+        document.body.classList.toggle('is-busy', busy);
+    }
+
+    // Sincronizza scriptSelect con il valore preselezionato da Thymeleaf
+    const preselected = currentBadge.textContent.trim();
+    if (preselected && preselected !== '(nuovo)') {
+        scriptSelect.value = preselected;
+        btnUpdate.disabled = false;
+        document.getElementById('updateSelectedScript').value = preselected;
+        saveNameInput.value = preselected;
+    } else {
+        scriptSelect.value = '';
+        btnUpdate.disabled = true;
+        document.getElementById('updateSelectedScript').value = '';
+    }
+
+})();
+</script>
+</body>
+</html>
