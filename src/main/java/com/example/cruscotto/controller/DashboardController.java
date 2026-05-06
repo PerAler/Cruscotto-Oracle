@@ -29,6 +29,7 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -39,6 +40,10 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 @Controller
 public class DashboardController {
+
+    private record ErrorViewModel(com.example.cruscotto.model.ExecutionLogEntry error,
+                                  String oracleCauseSection) {
+    }
 
     private final SqlProcedureCatalogService catalogService;
     private final OracleProcedureExecutorService executorService;
@@ -118,16 +123,52 @@ public class DashboardController {
     }
 
     @GetMapping("/errors")
-    public String errors(Model model) {
+    public String errors(@RequestParam(value = "successMessage", required = false) String successMessage,
+                         @RequestParam(value = "errorMessage", required = false) String errorMessage,
+                         Model model) {
         List<com.example.cruscotto.model.ExecutionLogEntry> allErrors = executionLogService.latest()
                 .stream()
                 .filter(e -> "KO".equals(e.status()))
                 .toList();
+        List<ErrorViewModel> errorViews = allErrors.stream()
+            .map(e -> new ErrorViewModel(e, extractCausedByErrorSection(e.stackTrace())))
+            .toList();
 
         model.addAttribute("allErrors", allErrors);
+        model.addAttribute("errorViews", errorViews);
+        model.addAttribute("successMessage", successMessage);
+        model.addAttribute("errorMessage", errorMessage);
         model.addAttribute("runtimePid", runtimePid);
         model.addAttribute("runtimeStartedAt", runtimeStartedAt);
         return "errors";
+    }
+
+    @PostMapping("/errors/delete")
+    public String deleteSingleError(@RequestParam("errorIndex") int errorIndex) {
+        boolean removed = executionLogService.deleteErrorAtIndex(errorIndex);
+        if (removed) {
+            return redirectToErrors("Errore eliminato dalla lista", null);
+        }
+        return redirectToErrors(null, "Impossibile eliminare l'errore selezionato");
+    }
+
+    @PostMapping("/errors/delete-all")
+    public String deleteAllErrors() {
+        int removed = executionLogService.deleteAllErrors();
+        if (removed > 0) {
+            return redirectToErrors("Tutti gli errori sono stati eliminati", null);
+        }
+        return redirectToErrors(null, "Nessun errore da eliminare");
+    }
+
+    @GetMapping("/errors/delete")
+    public String rejectGetDeleteError() {
+        return redirectToErrors(null, "Eliminazione errore disponibile solo via POST.");
+    }
+
+    @GetMapping("/errors/delete-all")
+    public String rejectGetDeleteAllErrors() {
+        return redirectToErrors(null, "Eliminazione totale errori disponibile solo via POST.");
     }
 
     @GetMapping("/logs")
@@ -404,6 +445,22 @@ public class DashboardController {
         return runtimeName;
     }
 
+    private String extractCausedByErrorSection(String stackTrace) {
+        if (stackTrace == null || stackTrace.isBlank()) {
+            return "";
+        }
+
+        List<String> extracted = new ArrayList<>();
+        String[] lines = stackTrace.split("\\r?\\n");
+        for (String line : lines) {
+            String trimmed = line.trim();
+            if (trimmed.toLowerCase().startsWith("caused by:") && trimmed.toLowerCase().contains("error")) {
+                extracted.add(trimmed);
+            }
+        }
+        return String.join(System.lineSeparator(), extracted);
+    }
+
     private Map<String, Object> parseEditorParams(String queryParams) {
         Map<String, Object> params = new LinkedHashMap<>();
         if (queryParams == null || queryParams.isBlank()) {
@@ -447,6 +504,17 @@ public class DashboardController {
         if (selectedProcedure != null && !selectedProcedure.isBlank()) {
             builder.queryParam("selectedProcedure", selectedProcedure);
         }
+        if (successMessage != null && !successMessage.isBlank()) {
+            builder.queryParam("successMessage", successMessage);
+        }
+        if (errorMessage != null && !errorMessage.isBlank()) {
+            builder.queryParam("errorMessage", errorMessage);
+        }
+        return "redirect:" + builder.build().encode().toUriString();
+    }
+
+    private String redirectToErrors(String successMessage, String errorMessage) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromPath("/errors");
         if (successMessage != null && !successMessage.isBlank()) {
             builder.queryParam("successMessage", successMessage);
         }

@@ -22,7 +22,12 @@
 
 <main class="layout">
     <section class="card">
-        <a href="/" class="btn-back">← Torna al Dashboard</a>
+        <button type="button" class="btn-back" onclick="window.location.reload()">↻ Refresh pagina</button>
+    </section>
+
+    <section class="card messages" th:if="${successMessage != null or errorMessage != null}">
+        <p class="ok" th:if="${successMessage != null}" th:text="${successMessage}"></p>
+        <p class="ko" th:if="${errorMessage != null}" th:text="${errorMessage}"></p>
     </section>
 
     <section class="card" th:if="${allErrors.isEmpty()}">
@@ -30,23 +35,42 @@
     </section>
 
     <section class="card errors-full" th:unless="${allErrors.isEmpty()}">
-        <h2>Errori Registrati (<span th:text="${allErrors.size()}"></span>)</h2>
+        <div class="errors-titlebar">
+            <h2>Errori Registrati (<span th:text="${allErrors.size()}"></span>)</h2>
+            <div class="errors-actions">
+                <button type="button" id="toggleOracleErrors" class="filter-oracle-btn" title="Mostra solo errori Oracle">
+                    ⚠ Solo errori Oracle
+                </button>
+                <form method="post" action="/errors/delete-all" class="delete-all-errors-form"
+                      onsubmit="return confirm('Confermi la cancellazione di tutti gli errori visibili?');">
+                    <button type="submit" class="delete-all-errors-btn" title="Cancella tutti gli errori">🗑 Cancella tutti</button>
+                </form>
+            </div>
+        </div>
+        <p id="oracleFilterEmpty" class="oracle-filter-empty" hidden>Nessun errore Oracle rilevato.</p>
         <div class="error-list-full">
-            <article class="error-item-full" th:each="error : ${allErrors}">
+            <article class="error-item-full" th:each="view, iterStat : ${errorViews}"
+                     th:attr="data-stack=${view.oracleCauseSection}">
                 <div class="error-header-full">
-                    <span class="error-procedure-badge" th:text="${error.procedureName()}"></span>
+                    <span class="error-procedure-badge" th:text="${view.error.procedureName()}"></span>
                     <span class="error-status">KO</span>
-                    <span class="error-time" th:text="${#temporals.format(error.timestamp(), 'dd/MM/yyyy HH:mm:ss')}"></span>
-                    <span class="error-duration" th:text="${error.durationMs() + 'ms'}"></span>
+                    <span class="error-time" th:text="${#temporals.format(view.error.timestamp(), 'dd/MM/yyyy HH:mm:ss')}"></span>
+                    <span class="error-duration" th:text="${view.error.durationMs() + 'ms'}"></span>
+                    <form method="post" action="/errors/delete" class="delete-error-form"
+                          onsubmit="return confirm('Confermi la cancellazione di questo errore?');">
+                        <input type="hidden" name="errorIndex" th:value="${iterStat.index}">
+                        <button type="submit" class="delete-error-btn" title="Elimina errore" aria-label="Elimina errore">🗑</button>
+                    </form>
                 </div>
-                <div class="error-message-full" th:text="${error.message()}"></div>
-                <details class="error-params-full" th:if="${error.parameters() != null and !error.parameters().isEmpty()}">
+                <div class="error-message-full" th:text="${view.error.message()}"></div>
+                <details class="error-params-full" th:if="${view.error.parameters() != null and !view.error.parameters().isEmpty()}">
                     <summary>📋 Parametri dell'esecuzione</summary>
-                    <pre th:text="${error.parameters()}"></pre>
+                    <pre th:text="${view.error.parameters()}"></pre>
                 </details>
-                <details class="error-stacktrace-full" th:if="${error.stackTrace() != null}">
-                    <summary>🔍 Stack Trace completo</summary>
-                    <pre th:text="${error.stackTrace()}"></pre>
+                <details class="error-stacktrace-full"
+                         th:if="${view.oracleCauseSection != null and !#strings.isEmpty(view.oracleCauseSection)}">
+                    <summary>🔍 Caused by: Error</summary>
+                    <pre th:text="${view.oracleCauseSection}"></pre>
                 </details>
             </article>
         </div>
@@ -54,9 +78,58 @@
 </main>
 
 <script>
-    // Gestione filtri e ricerca, eventualmente
     document.addEventListener('DOMContentLoaded', function() {
-        // Inizializzazione futura se necessaria
+        var ORACLE_FILTER_KEY = 'cruscotto.errors.oracleOnly';
+        var toggleButton = document.getElementById('toggleOracleErrors');
+        var emptyLabel = document.getElementById('oracleFilterEmpty');
+        var rows = Array.from(document.querySelectorAll('.error-item-full'));
+        var oracleOnly = localStorage.getItem(ORACLE_FILTER_KEY) === 'true';
+
+        function isOracleError(text) {
+            return /Caused by:\s*.*Error|ORA-\d{3,5}|PLS-\d{3,5}/i.test(text || '');
+        }
+
+        function applyOracleFilter() {
+            var visible = 0;
+            rows.forEach(function (row) {
+                if (!oracleOnly) {
+                    row.hidden = false;
+                    visible++;
+                    return;
+                }
+
+                var stack = row.dataset.stack || '';
+                var matches = isOracleError(stack);
+                row.hidden = !matches;
+                if (matches) {
+                    visible++;
+                }
+            });
+
+            if (emptyLabel) {
+                emptyLabel.hidden = visible !== 0;
+            }
+
+            if (toggleButton) {
+                if (oracleOnly) {
+                    toggleButton.classList.add('active');
+                    toggleButton.textContent = '↺ Mostra tutti gli errori';
+                } else {
+                    toggleButton.classList.remove('active');
+                    toggleButton.textContent = '⚠ Solo errori Oracle';
+                }
+            }
+        }
+
+        if (toggleButton) {
+            toggleButton.addEventListener('click', function () {
+                oracleOnly = !oracleOnly;
+                localStorage.setItem(ORACLE_FILTER_KEY, String(oracleOnly));
+                applyOracleFilter();
+            });
+        }
+
+        applyOracleFilter();
     });
 </script>
 </body>

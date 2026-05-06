@@ -709,6 +709,71 @@ th, td {
     margin-top: 0;
 }
 
+.errors-titlebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.errors-titlebar h2 {
+    margin: 0;
+}
+
+.errors-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.filter-oracle-btn {
+    border: 1px solid #b8922a;
+    background: #fff8e0;
+    color: #6f5300;
+    border-radius: 7px;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.filter-oracle-btn:hover {
+    background: #ffefbf;
+}
+
+.filter-oracle-btn.active {
+    background: #f3dd95;
+    border-color: #9f7700;
+    color: #493600;
+}
+
+.oracle-filter-empty {
+    margin: 0.6rem 0 0;
+    color: #7b2d2d;
+    font-weight: 600;
+}
+
+.delete-all-errors-form {
+    margin: 0;
+}
+
+.delete-all-errors-btn {
+    border: 1px solid #d67f7f;
+    background: #c33a3a;
+    color: #fff;
+    border-radius: 7px;
+    padding: 0.4rem 0.75rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.delete-all-errors-btn:hover {
+    background: #a92f2f;
+}
+
 .error-list-full {
     display: flex;
     flex-direction: column;
@@ -802,6 +867,25 @@ th, td {
     overflow-x: auto;
     margin: 0.5rem 0 0 0;
     line-height: 1.4;
+}
+
+.delete-error-form {
+    margin: 0;
+}
+
+.delete-error-btn {
+    border: 1px solid #efb1b1;
+    background: #fff1f1;
+    color: #a31c1c;
+    border-radius: 6px;
+    padding: 0.2rem 0.45rem;
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.delete-error-btn:hover {
+    background: #ffdcdc;
 }
 
 @keyframes spin {

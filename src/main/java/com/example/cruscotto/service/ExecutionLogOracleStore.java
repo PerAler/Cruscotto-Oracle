@@ -54,6 +54,30 @@ public class ExecutionLogOracleStore {
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """;
 
+    private static final String DELETE_ONE_SQL = """
+            DELETE FROM CRUSCOTTO_EXEC_LOG
+            WHERE ROWID IN (
+                SELECT ROWID
+                FROM (
+                    SELECT ROWID
+                    FROM CRUSCOTTO_EXEC_LOG
+                    WHERE EVENT_TS = ?
+                      AND PROCEDURE_NAME = ?
+                      AND STATUS = ?
+                      AND DURATION_MS = ?
+                      AND NVL(MESSAGE, ' ') = NVL(?, ' ')
+                      AND NVL(OUTPUT_HTML_FILE, ' ') = NVL(?, ' ')
+                    ORDER BY EVENT_TS DESC
+                )
+                WHERE ROWNUM = 1
+            )
+            """;
+
+    private static final String DELETE_ALL_ERRORS_SQL = """
+            DELETE FROM CRUSCOTTO_EXEC_LOG
+            WHERE STATUS = 'KO'
+            """;
+
             private static final String SELECT_LATEST_SQL = """
                  SELECT EVENT_TS,
                      PROCEDURE_NAME,
@@ -146,6 +170,47 @@ public class ExecutionLogOracleStore {
             logger.warn("Lettura log persistiti non riuscita: {}", ex.getMessage());
             persistenceAvailable.set(false);
             return Collections.emptyList();
+        }
+    }
+
+    public boolean deleteOne(ExecutionLogEntry entry) {
+        if (!persistenceEnabled || entry == null) {
+            return false;
+        }
+        if (!ensureStoreReady()) {
+            return false;
+        }
+
+        try {
+            int updated = jdbcTemplate.update(DELETE_ONE_SQL,
+                    Timestamp.valueOf(entry.timestamp()),
+                    entry.procedureName(),
+                    entry.status(),
+                    entry.durationMs(),
+                    trimForVarchar(entry.message(), 4000),
+                    trimForVarchar(entry.outputHtmlFile(), 512));
+            return updated > 0;
+        } catch (Exception ex) {
+            logger.warn("Cancellazione log persistito non riuscita: {}", ex.getMessage());
+            persistenceAvailable.set(false);
+            return false;
+        }
+    }
+
+    public int deleteAllErrors() {
+        if (!persistenceEnabled) {
+            return 0;
+        }
+        if (!ensureStoreReady()) {
+            return 0;
+        }
+
+        try {
+            return jdbcTemplate.update(DELETE_ALL_ERRORS_SQL);
+        } catch (Exception ex) {
+            logger.warn("Cancellazione completa errori non riuscita: {}", ex.getMessage());
+            persistenceAvailable.set(false);
+            return 0;
         }
     }
 
