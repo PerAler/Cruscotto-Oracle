@@ -80,6 +80,7 @@ public class DashboardController {
     public String index(@RequestParam(value = "selectedProcedure", required = false) String selectedProcedure,
                         @RequestParam(value = "successMessage", required = false) String successMessage,
                         @RequestParam(value = "errorMessage", required = false) String errorMessage,
+                        @RequestParam(value = "outputFile", required = false) String outputFile,
                         Model model) {
         List<com.example.cruscotto.model.ProcedureDefinition> allProcedures = catalogService.findAll();
         String effectiveSelection = resolveSelection(selectedProcedure, allProcedures);
@@ -111,6 +112,7 @@ public class DashboardController {
         model.addAttribute("logs", executionLogService.latest());
         model.addAttribute("successMessage", successMessage);
         model.addAttribute("errorMessage", errorMessage);
+        model.addAttribute("outputFile", outputFile);
         model.addAttribute("errorCount", errorCount);
         model.addAttribute("okCount", okCount);
         model.addAttribute("outputCount", outputCount);
@@ -279,17 +281,27 @@ public class DashboardController {
                                  @RequestParam(value = "selectedProcedure", required = false) String selectedProcedure) {
         String successMessage = null;
         String errorMessage = null;
+        String outputFile = null;
 
         try {
             Map<String, Object> params = parseEditorParams(queryParams);
             String message = executorService.runAdhocSelect(queryLabel, sqlText, params);
             String label = (queryLabel == null || queryLabel.isBlank()) ? "SQL Editor" : queryLabel.trim();
             successMessage = label + ": " + message;
+            
+            // Recupera l'ultima entry di log per estrarre il nome del file HTML
+            List<com.example.cruscotto.model.ExecutionLogEntry> latest = executionLogService.latest();
+            if (!latest.isEmpty()) {
+                String outputHtmlFile = latest.get(0).outputHtmlFile();
+                if (outputHtmlFile != null && !outputHtmlFile.isBlank()) {
+                    outputFile = outputHtmlFile;
+                }
+            }
         } catch (Exception ex) {
             errorMessage = "Editor SQL: " + ex.getMessage();
         }
 
-        return redirectToDashboard(selectedProcedure, successMessage, errorMessage);
+        return redirectToDashboardWithOutput(selectedProcedure, successMessage, errorMessage, outputFile);
     }
 
     @PostMapping("/query/save")
@@ -499,7 +511,7 @@ public class DashboardController {
         throw new IllegalArgumentException("Specifica un nome file per il salvataggio");
     }
 
-    private String redirectToDashboard(String selectedProcedure, String successMessage, String errorMessage) {
+    private String redirectToDashboardWithOutput(String selectedProcedure, String successMessage, String errorMessage, String outputFile) {
         UriComponentsBuilder builder = UriComponentsBuilder.fromPath("/");
         if (selectedProcedure != null && !selectedProcedure.isBlank()) {
             builder.queryParam("selectedProcedure", selectedProcedure);
@@ -510,7 +522,14 @@ public class DashboardController {
         if (errorMessage != null && !errorMessage.isBlank()) {
             builder.queryParam("errorMessage", errorMessage);
         }
-        return "redirect:" + builder.build().encode().toUriString();
+        if (outputFile != null && !outputFile.isBlank()) {
+            builder.queryParam("outputFile", outputFile);
+        }
+        return "redirect:" + builder.toUriString();
+    }
+
+    private String redirectToDashboard(String selectedProcedure, String successMessage, String errorMessage) {
+        return redirectToDashboardWithOutput(selectedProcedure, successMessage, errorMessage, null);
     }
 
     private String redirectToErrors(String successMessage, String errorMessage) {

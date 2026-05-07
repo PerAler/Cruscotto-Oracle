@@ -30,6 +30,10 @@
 <main class="layout">
     <section class="card messages" th:if="${successMessage != null or errorMessage != null}">
         <p class="ok" th:if="${successMessage != null}" th:text="${successMessage}"></p>
+        <p class="ok" th:if="${successMessage != null and outputFile != null}">
+            <a th:href="@{/output/{filename}(filename=${outputFile})}" target="_blank" rel="noopener"
+               style="color:#155724;font-weight:600;text-decoration:underline">▶ Visualizza output HTML</a>
+        </p>
         <p class="ko" th:if="${errorMessage != null}" th:text="${errorMessage}"></p>
     </section>
 
@@ -148,6 +152,64 @@
     </section>
 
     <section class="card">
+        <h2>Editor SQL Rapido</h2>
+        <p class="param-help">Suggerimenti keyword SQL attivi: premi <strong>Tab</strong> per accettare il suggerimento.</p>
+
+        <div class="form-block">
+            <label for="queryLabel">Etichetta query</label>
+            <input type="text" id="queryLabel" placeholder="es. Fatture ultimo trimestre">
+
+            <label for="queryFileName">Nome file per salvataggio (opzionale)</label>
+            <input type="text" id="queryFileName" placeholder="es. query_fatture_q1">
+
+            <label for="sqlText">Query SQL</label>
+            <div style="position:relative">
+                <textarea id="sqlText"
+                          class="sql-editor sql-editor-source"
+                          spellcheck="false"
+                          autocorrect="off"
+                          autocapitalize="off"
+                          autocomplete="off"
+                          placeholder="SELECT * FROM ..."></textarea>
+                <div class="sql-suggest-box" id="sqlSuggestBox" hidden>
+                    <ul id="sqlSuggestList"></ul>
+                </div>
+            </div>
+
+            <label for="queryParams">Parametri bind (nome=valore, uno per riga)</label>
+            <textarea id="queryParams" class="params-editor" placeholder="anno=2026&#10;stato=ATTIVO"></textarea>
+        </div>
+
+        <div class="editor-actions" style="margin-top:0.65rem">
+            <button type="button" id="loadSelectedScript" class="secondary">Carica SQL Selezionato</button>
+
+            <form method="post" action="/query/execute" style="display:inline">
+                <input type="hidden" name="sqlText" id="executeSqlText">
+                <input type="hidden" name="queryLabel" id="executeQueryLabel">
+                <input type="hidden" name="queryParams" id="executeQueryParams">
+                <input type="hidden" name="selectedProcedure" th:value="${selectedProcedure}">
+                <button type="submit" id="executeQueryBtn">Esegui Query</button>
+            </form>
+
+            <form method="post" action="/query/save" style="display:inline">
+                <input type="hidden" name="sqlText" id="saveSqlText">
+                <input type="hidden" name="queryLabel" id="saveQueryLabel">
+                <input type="hidden" name="queryFileName" id="saveQueryFileName">
+                <input type="hidden" name="selectedProcedure" th:value="${selectedProcedure}">
+                <button type="submit" id="saveQueryBtn">Salva Nuovo Script</button>
+            </form>
+
+            <form method="post" action="/query/update" style="display:inline">
+                <input type="hidden" name="sqlText" id="updateSqlText">
+                <input type="hidden" name="selectedProcedure" th:value="${selectedProcedure}">
+                <button type="submit" id="updateQueryBtn">Aggiorna Script Selezionato</button>
+            </form>
+        </div>
+
+        <textarea id="selectedScriptSql" hidden th:text="${!procedures.isEmpty() ? procedures[0].sqlText() : ''}"></textarea>
+    </section>
+
+    <section class="card">
         <h2>Schedulazioni Attive</h2>
         <table>
             <thead>
@@ -187,8 +249,20 @@
         var queryFileName = document.getElementById("queryFileName");
         var sqlText = document.getElementById("sqlText");
         var queryParams = document.getElementById("queryParams");
+        var sqlSuggestBox = document.getElementById("sqlSuggestBox");
+        var sqlSuggestList = document.getElementById("sqlSuggestList");
         var loadSelectedScript = document.getElementById("loadSelectedScript");
         var selectedScriptSql = document.getElementById("selectedScriptSql");
+        var executeSqlText = document.getElementById("executeSqlText");
+        var executeQueryLabel = document.getElementById("executeQueryLabel");
+        var executeQueryParams = document.getElementById("executeQueryParams");
+        var saveSqlText = document.getElementById("saveSqlText");
+        var saveQueryLabel = document.getElementById("saveQueryLabel");
+        var saveQueryFileName = document.getElementById("saveQueryFileName");
+        var updateSqlText = document.getElementById("updateSqlText");
+        var executeQueryBtn = document.getElementById("executeQueryBtn");
+        var saveQueryBtn = document.getElementById("saveQueryBtn");
+        var updateQueryBtn = document.getElementById("updateQueryBtn");
         var busyOverlay = document.getElementById("busyOverlay");
         var isBusy = false;
         var SQL_EDITOR_KEY = "cruscotto.sqlEditor.query";
@@ -205,6 +279,18 @@
         var sqlApplyLine = document.getElementById("sqlApplyLine");
         var toggleBetaMode = document.getElementById("toggleBetaMode");
         var sqlActiveLine = document.getElementById("sqlActiveLine");
+        var SQL_KEYWORDS = [
+            "SELECT", "FROM", "WHERE", "GROUP", "BY", "ORDER", "HAVING", "DISTINCT",
+            "WITH", "AS", "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "OUTER", "ON",
+            "UNION", "UNION ALL", "EXISTS", "IN", "NOT", "AND", "OR", "NULL", "IS",
+            "CASE", "WHEN", "THEN", "ELSE", "END", "LIKE", "BETWEEN", "FETCH", "FIRST",
+            "NEXT", "ROWS", "ONLY", "OFFSET", "ROWNUM", "ROW_NUMBER", "OVER", "PARTITION",
+            "CREATE", "VIEW", "ALTER", "DROP", "TABLE", "INSERT", "INTO", "VALUES",
+            "UPDATE", "SET", "DELETE", "MERGE", "USING", "COMMIT", "ROLLBACK"
+        ];
+        var suggestItems = [];
+        var suggestIndex = -1;
+        var suggestContext = null;
         var activeLineIndex = 0;
         var hasActiveLine = false;
         // Stable mode: force classic editor to avoid preview click misalignment.
@@ -307,6 +393,151 @@
         if (sqlText) {
             sqlText.value = localStorage.getItem(SQL_EDITOR_KEY) || sqlText.value;
             renderPreview();
+
+            function escapeHtml(text) {
+                return text
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/\"/g, "&quot;")
+                    .replace(/'/g, "&#39;");
+            }
+
+            function hideSuggestions() {
+                suggestItems = [];
+                suggestIndex = -1;
+                suggestContext = null;
+                if (sqlSuggestList) {
+                    sqlSuggestList.innerHTML = "";
+                }
+                if (sqlSuggestBox) {
+                    sqlSuggestBox.hidden = true;
+                }
+            }
+
+            function getAutocompleteContext() {
+                var caret = sqlText.selectionStart;
+                if (caret !== sqlText.selectionEnd) {
+                    return null;
+                }
+                var text = sqlText.value;
+                var start = caret;
+                while (start > 0 && /[A-Za-z_]/.test(text.charAt(start - 1))) {
+                    start -= 1;
+                }
+                var end = caret;
+                while (end < text.length && /[A-Za-z_]/.test(text.charAt(end))) {
+                    end += 1;
+                }
+                var prefix = text.substring(start, caret);
+                if (!prefix || prefix.length < 1) {
+                    return null;
+                }
+                if (start > 0 && text.charAt(start - 1) === ":") {
+                    return null;
+                }
+                return {
+                    start: start,
+                    end: end,
+                    prefix: prefix
+                };
+            }
+
+            function highlightPrefix(word, prefix) {
+                var upperWord = word.toUpperCase();
+                var upperPrefix = prefix.toUpperCase();
+                if (!upperWord.startsWith(upperPrefix)) {
+                    return escapeHtml(word);
+                }
+                var left = escapeHtml(word.substring(0, prefix.length));
+                var right = escapeHtml(word.substring(prefix.length));
+                return "<strong>" + left + "</strong>" + right;
+            }
+
+            function renderSuggestions(items, prefix) {
+                if (!sqlSuggestBox || !sqlSuggestList) {
+                    return;
+                }
+                sqlSuggestList.innerHTML = items.map(function (item, idx) {
+                    return '<li class="sql-suggest-item' + (idx === suggestIndex ? ' active' : '') + '" data-idx="' + idx + '">' +
+                        highlightPrefix(item, prefix) +
+                        "</li>";
+                }).join("");
+                sqlSuggestBox.hidden = false;
+            }
+
+            function refreshSuggestions() {
+                if (!sqlSuggestBox || !sqlSuggestList) {
+                    return;
+                }
+                var context = getAutocompleteContext();
+                if (!context) {
+                    hideSuggestions();
+                    return;
+                }
+
+                var prefixUpper = context.prefix.toUpperCase();
+                var matches = SQL_KEYWORDS
+                    .filter(function (kw) { return kw.startsWith(prefixUpper) && kw !== prefixUpper; })
+                    .slice(0, 8);
+
+                if (!matches.length) {
+                    hideSuggestions();
+                    return;
+                }
+
+                suggestContext = context;
+                suggestItems = matches;
+                suggestIndex = 0;
+                renderSuggestions(suggestItems, context.prefix);
+            }
+
+            function setActiveSuggestion(nextIndex) {
+                if (!suggestItems.length || !sqlSuggestList) {
+                    return;
+                }
+                suggestIndex = (nextIndex + suggestItems.length) % suggestItems.length;
+                Array.from(sqlSuggestList.children).forEach(function (li, idx) {
+                    li.classList.toggle("active", idx === suggestIndex);
+                });
+            }
+
+            function applySuggestion(index) {
+                if (!suggestContext || !suggestItems.length) {
+                    return false;
+                }
+                var selected = suggestItems[index];
+                if (!selected) {
+                    return false;
+                }
+
+                var text = sqlText.value;
+                var before = text.substring(0, suggestContext.start);
+                var after = text.substring(suggestContext.end);
+                var insert = selected + " ";
+
+                sqlText.value = before + insert + after;
+                var newCaret = before.length + insert.length;
+                sqlText.selectionStart = newCaret;
+                sqlText.selectionEnd = newCaret;
+                persistSqlEditor();
+                renderPreview();
+                hideSuggestions();
+                return true;
+            }
+
+            if (sqlSuggestList) {
+                sqlSuggestList.addEventListener("mousedown", function (e) {
+                    var li = e.target.closest(".sql-suggest-item");
+                    if (!li) {
+                        return;
+                    }
+                    e.preventDefault();
+                    var idx = Number(li.getAttribute("data-idx"));
+                    applySuggestion(idx);
+                    sqlText.focus();
+                });
+            }
 
             function persistSqlEditor() {
                 localStorage.setItem(SQL_EDITOR_KEY, sqlText.value);
@@ -452,6 +683,61 @@
             sqlText.addEventListener("input", function () {
                 persistSqlEditor();
                 renderPreview();
+                refreshSuggestions();
+            });
+
+            sqlText.addEventListener("click", function () {
+                refreshSuggestions();
+            });
+
+            sqlText.addEventListener("blur", function () {
+                setTimeout(function () {
+                    if (document.activeElement !== sqlText) {
+                        hideSuggestions();
+                    }
+                }, 120);
+            });
+
+            sqlText.addEventListener("keydown", function (e) {
+                if (sqlSuggestBox && !sqlSuggestBox.hidden && suggestItems.length) {
+                    if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        setActiveSuggestion(suggestIndex + 1);
+                        return;
+                    }
+                    if (e.key === "ArrowUp") {
+                        e.preventDefault();
+                        setActiveSuggestion(suggestIndex - 1);
+                        return;
+                    }
+                    if (e.key === "Enter") {
+                        e.preventDefault();
+                        applySuggestion(suggestIndex);
+                        return;
+                    }
+                    if (e.key === "Escape") {
+                        e.preventDefault();
+                        hideSuggestions();
+                        return;
+                    }
+                }
+
+                if (e.key === "Tab") {
+                    if (sqlSuggestBox && !sqlSuggestBox.hidden && suggestItems.length) {
+                        e.preventDefault();
+                        applySuggestion(suggestIndex >= 0 ? suggestIndex : 0);
+                        return;
+                    }
+
+                    e.preventDefault();
+                    var start = sqlText.selectionStart;
+                    var end = sqlText.selectionEnd;
+                    sqlText.value = sqlText.value.substring(0, start) + "    " + sqlText.value.substring(end);
+                    sqlText.selectionStart = sqlText.selectionEnd = start + 4;
+                    persistSqlEditor();
+                    renderPreview();
+                    refreshSuggestions();
+                }
             });
 
             if (sqlPreviewPanel) {
@@ -518,6 +804,38 @@
             }
 
             applyEditorMode();
+
+            function syncHiddenEditorFields() {
+                if (executeSqlText) {
+                    executeSqlText.value = sqlText.value;
+                }
+                if (executeQueryLabel && queryLabel) {
+                    executeQueryLabel.value = queryLabel.value || "";
+                }
+                if (executeQueryParams && queryParams) {
+                    executeQueryParams.value = queryParams.value || "";
+                }
+                if (saveSqlText) {
+                    saveSqlText.value = sqlText.value;
+                }
+                if (saveQueryLabel && queryLabel) {
+                    saveQueryLabel.value = queryLabel.value || "";
+                }
+                if (saveQueryFileName && queryFileName) {
+                    saveQueryFileName.value = queryFileName.value || "";
+                }
+                if (updateSqlText) {
+                    updateSqlText.value = sqlText.value;
+                }
+            }
+
+            [executeQueryBtn, saveQueryBtn, updateQueryBtn].forEach(function (btn) {
+                if (btn) {
+                    btn.addEventListener("click", function () {
+                        syncHiddenEditorFields();
+                    });
+                }
+            });
         }
 
         if (queryParams) {

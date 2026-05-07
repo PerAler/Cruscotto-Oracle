@@ -349,6 +349,44 @@ button.cancel {
     color: #0f2a30;
 }
 
+.sql-suggest-box {
+    position: absolute;
+    left: 0.45rem;
+    right: 0.45rem;
+    bottom: 0.55rem;
+    max-height: 180px;
+    overflow-y: auto;
+    border: 1px solid #3a4045;
+    border-radius: 6px;
+    background: #202427;
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
+    z-index: 20;
+}
+
+.sql-suggest-box ul {
+    margin: 0;
+    padding: 0.2rem 0;
+    list-style: none;
+}
+
+.sql-suggest-item {
+    padding: 0.3rem 0.55rem;
+    color: #d8dee9;
+    font-size: 0.8rem;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.sql-suggest-item strong {
+    color: #f0c040;
+    font-weight: 700;
+}
+
+.sql-suggest-item.active,
+.sql-suggest-item:hover {
+    background: #2f3a42;
+}
+
 .sql-editor:focus {
     border-color: #7fbac8;
     box-shadow: 0 0 0 2px rgba(10, 111, 144, 0.15);

@@ -30,6 +30,7 @@
         /* ── Editor SQL con numeri di riga ───────────────────────────────── */
         .sql-editor-wrap {
             display: flex;
+            position: relative;
             border: 1px solid var(--line);
             border-radius: 8px;
             overflow: hidden;
@@ -78,6 +79,44 @@
 
         #sqlEditor::selection {
             background: #4a5568;
+        }
+
+        .sql-suggest-box {
+            position: absolute;
+            left: 3.25rem;
+            right: 0.75rem;
+            bottom: 0.65rem;
+            max-height: 180px;
+            overflow-y: auto;
+            border: 1px solid #3a4045;
+            border-radius: 6px;
+            background: #202427;
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
+            z-index: 15;
+        }
+
+        .sql-suggest-box ul {
+            margin: 0;
+            padding: 0.2rem 0;
+            list-style: none;
+        }
+
+        .sql-suggest-item {
+            padding: 0.3rem 0.55rem;
+            color: #d8dee9;
+            font-size: 0.8rem;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .sql-suggest-item strong {
+            color: #f0c040;
+            font-weight: 700;
+        }
+
+        .sql-suggest-item.active,
+        .sql-suggest-item:hover {
+            background: #2f3a42;
         }
 
         /* ── Params editor ───────────────────────────────────────────────── */
@@ -167,13 +206,17 @@
         /* ── Pannello risultati ──────────────────────────────────────────── */
         #resultPanel {
             display: none;
+            border: 1px solid #c9dce2;
+            background: linear-gradient(180deg, #fffdf8 0%, #f6fbff 100%);
         }
 
         .result-header {
             display: flex;
             align-items: center;
             gap: 0.6rem;
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.7rem;
+            padding: 0.15rem 0.1rem 0.45rem;
+            border-bottom: 1px dashed #c7d8de;
         }
 
         .result-header h3 { margin: 0; font-size: 1rem; }
@@ -183,7 +226,8 @@
             min-height: 380px;
             border: 1px solid var(--line);
             border-radius: 8px;
-            background: #fff;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fbfd 100%);
+            box-shadow: inset 0 0 0 1px rgba(5, 102, 141, 0.05);
         }
 
         /* ── Header ──────────────────────────────────────────────────────── */
@@ -290,6 +334,9 @@
                       autocomplete="off"
                       placeholder="-- Scrivi qui la tua query SELECT / WITH ..."
                       th:text="${sqlContent}"></textarea>
+            <div class="sql-suggest-box" id="sqlSuggestBox" hidden>
+                <ul id="sqlSuggestList"></ul>
+            </div>
         </div>
 
         <!-- ── Parametri e label ────────────────────────────────────────────── -->
@@ -342,6 +389,10 @@
             <h3>Risultati</h3>
             <span id="resultMsg" style="font-size:0.85rem;color:#556"></span>
             <span class="spacer" style="flex:1"></span>
+            <button class="btn btn-sec" id="btnToggleDensity" type="button"
+                    style="padding:0.25rem 0.7rem;font-size:0.8rem">Vista compatta</button>
+            <button class="btn btn-sec" id="btnToggleColumnWrap" type="button"
+                    style="padding:0.25rem 0.7rem;font-size:0.8rem">Colonne strette</button>
             <a id="resultOpenLink" href="#" target="_blank" rel="noopener"
                style="font-size:0.82rem;color:var(--accent);display:none">Apri in finestra ↗</a>
             <button class="btn btn-sec" id="btnCloseResult" type="button"
@@ -358,6 +409,8 @@
 
     // ── Riferimenti DOM ──────────────────────────────────────────────────────
     const sqlEditor       = document.getElementById('sqlEditor');
+    const sqlSuggestBox   = document.getElementById('sqlSuggestBox');
+    const sqlSuggestList  = document.getElementById('sqlSuggestList');
     const lineNumbers     = document.getElementById('lineNumbers');
     const scriptSelect    = document.getElementById('scriptSelect');
     const currentBadge    = document.getElementById('currentScriptBadge');
@@ -375,6 +428,26 @@
     const resultMsg       = document.getElementById('resultMsg');
     const resultOpenLink  = document.getElementById('resultOpenLink');
     const btnCloseResult  = document.getElementById('btnCloseResult');
+    const btnToggleDensity = document.getElementById('btnToggleDensity');
+    const btnToggleColumnWrap = document.getElementById('btnToggleColumnWrap');
+    const RESULT_DENSITY_KEY = 'cruscotto.result.tableDensity';
+    const RESULT_COLUMN_WRAP_KEY = 'cruscotto.result.columnWrap';
+    let resultDensity = localStorage.getItem(RESULT_DENSITY_KEY) || 'comfortable';
+    let resultColumnWrap = localStorage.getItem(RESULT_COLUMN_WRAP_KEY) === 'true';
+
+    const SQL_KEYWORDS = [
+        'SELECT', 'FROM', 'WHERE', 'GROUP', 'BY', 'ORDER', 'HAVING', 'DISTINCT',
+        'WITH', 'AS', 'JOIN', 'INNER', 'LEFT', 'RIGHT', 'FULL', 'OUTER', 'ON',
+        'UNION', 'UNION ALL', 'EXISTS', 'IN', 'NOT', 'AND', 'OR', 'NULL', 'IS',
+        'CASE', 'WHEN', 'THEN', 'ELSE', 'END', 'LIKE', 'BETWEEN', 'FETCH', 'FIRST',
+        'NEXT', 'ROWS', 'ONLY', 'OFFSET', 'ROWNUM', 'ROW_NUMBER', 'OVER', 'PARTITION',
+        'CREATE', 'VIEW', 'ALTER', 'DROP', 'TABLE', 'INSERT', 'INTO', 'VALUES',
+        'UPDATE', 'SET', 'DELETE', 'MERGE', 'USING', 'COMMIT', 'ROLLBACK'
+    ];
+
+    let suggestItems = [];
+    let suggestIndex = -1;
+    let suggestContext = null;
 
     // ── Numeri di riga ───────────────────────────────────────────────────────
     function updateLineNumbers() {
@@ -403,16 +476,187 @@
         queryParams.value = params.join('\n');
     }
 
+    function escapeHtml(text) {
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function hideSuggestions() {
+        suggestItems = [];
+        suggestIndex = -1;
+        suggestContext = null;
+        sqlSuggestList.innerHTML = '';
+        sqlSuggestBox.hidden = true;
+    }
+
+    function getAutocompleteContext() {
+        const caret = sqlEditor.selectionStart;
+        if (caret !== sqlEditor.selectionEnd) {
+            return null;
+        }
+        const text = sqlEditor.value;
+        let start = caret;
+        while (start > 0 && /[A-Za-z_]/.test(text.charAt(start - 1))) {
+            start -= 1;
+        }
+        let end = caret;
+        while (end < text.length && /[A-Za-z_]/.test(text.charAt(end))) {
+            end += 1;
+        }
+        const prefix = text.substring(start, caret);
+        if (!prefix || prefix.length < 1) {
+            return null;
+        }
+        if (start > 0 && text.charAt(start - 1) === ':') {
+            return null;
+        }
+        return {
+            start,
+            end,
+            prefix
+        };
+    }
+
+    function highlightPrefix(word, prefix) {
+        const upperWord = word.toUpperCase();
+        const upperPrefix = prefix.toUpperCase();
+        if (!upperWord.startsWith(upperPrefix)) {
+            return escapeHtml(word);
+        }
+        const left = escapeHtml(word.substring(0, prefix.length));
+        const right = escapeHtml(word.substring(prefix.length));
+        return '<strong>' + left + '</strong>' + right;
+    }
+
+    function renderSuggestions(items, prefix) {
+        sqlSuggestList.innerHTML = items.map((item, idx) => {
+            return '<li class="sql-suggest-item' + (idx === suggestIndex ? ' active' : '') + '" data-idx="' + idx + '">' +
+                highlightPrefix(item, prefix) +
+                '</li>';
+        }).join('');
+        sqlSuggestBox.hidden = false;
+    }
+
+    function refreshSuggestions() {
+        const context = getAutocompleteContext();
+        if (!context) {
+            hideSuggestions();
+            return;
+        }
+
+        const prefixUpper = context.prefix.toUpperCase();
+        const matches = SQL_KEYWORDS
+            .filter((kw) => kw.startsWith(prefixUpper) && kw !== prefixUpper)
+            .slice(0, 8);
+
+        if (!matches.length) {
+            hideSuggestions();
+            return;
+        }
+
+        suggestContext = context;
+        suggestItems = matches;
+        suggestIndex = 0;
+        renderSuggestions(suggestItems, context.prefix);
+    }
+
+    function setActiveSuggestion(nextIndex) {
+        if (!suggestItems.length) {
+            return;
+        }
+        suggestIndex = (nextIndex + suggestItems.length) % suggestItems.length;
+        Array.from(sqlSuggestList.children).forEach((li, idx) => {
+            li.classList.toggle('active', idx === suggestIndex);
+        });
+    }
+
+    function applySuggestion(index) {
+        if (!suggestContext || !suggestItems.length) {
+            return false;
+        }
+        const selected = suggestItems[index];
+        if (!selected) {
+            return false;
+        }
+
+        const text = sqlEditor.value;
+        const before = text.substring(0, suggestContext.start);
+        const after = text.substring(suggestContext.end);
+        const needsSpace = after.length > 0 && !/^\s|[,);]/.test(after.charAt(0));
+        const insert = selected + (needsSpace ? ' ' : ' ');
+
+        sqlEditor.value = before + insert + after;
+        const newCaret = before.length + insert.length;
+        sqlEditor.selectionStart = newCaret;
+        sqlEditor.selectionEnd = newCaret;
+        updateLineNumbers();
+        syncBindParamsFromSql();
+        hideSuggestions();
+        return true;
+    }
+
+    sqlSuggestList.addEventListener('mousedown', (e) => {
+        const li = e.target.closest('.sql-suggest-item');
+        if (!li) {
+            return;
+        }
+        e.preventDefault();
+        const idx = Number(li.getAttribute('data-idx'));
+        applySuggestion(idx);
+        sqlEditor.focus();
+    });
+
     sqlEditor.addEventListener('input', () => {
         updateLineNumbers();
         syncBindParamsFromSql();
+        refreshSuggestions();
     });
     sqlEditor.addEventListener('scroll', () => {
         lineNumbers.scrollTop = sqlEditor.scrollTop;
     });
+    sqlEditor.addEventListener('click', refreshSuggestions);
+    sqlEditor.addEventListener('blur', () => {
+        setTimeout(() => {
+            if (document.activeElement !== sqlEditor) {
+                hideSuggestions();
+            }
+        }, 120);
+    });
     sqlEditor.addEventListener('keydown', (e) => {
-        // Tab inserisce 4 spazi
+        if (!sqlSuggestBox.hidden && suggestItems.length) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setActiveSuggestion(suggestIndex + 1);
+                return;
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setActiveSuggestion(suggestIndex - 1);
+                return;
+            }
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                applySuggestion(suggestIndex);
+                return;
+            }
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                hideSuggestions();
+                return;
+            }
+        }
+
+        // Tab accetta suggerimento attivo, altrimenti inserisce 4 spazi
         if (e.key === 'Tab') {
+            if (!sqlSuggestBox.hidden && suggestItems.length) {
+                e.preventDefault();
+                applySuggestion(suggestIndex >= 0 ? suggestIndex : 0);
+                return;
+            }
             e.preventDefault();
             const start = sqlEditor.selectionStart;
             const end   = sqlEditor.selectionEnd;
@@ -420,6 +664,7 @@
             sqlEditor.selectionStart = sqlEditor.selectionEnd = start + 4;
             updateLineNumbers();
             syncBindParamsFromSql();
+            refreshSuggestions();
         }
     });
     updateLineNumbers();
@@ -539,7 +784,179 @@
         resultFrame.src = 'about:blank';
     });
 
+    resultFrame.addEventListener('load', () => {
+        applyResultTableTheme();
+        applyResultDensity();
+        applyResultColumnWrap();
+    });
+
+    if (btnToggleDensity) {
+        btnToggleDensity.addEventListener('click', () => {
+            resultDensity = resultDensity === 'compact' ? 'comfortable' : 'compact';
+            localStorage.setItem(RESULT_DENSITY_KEY, resultDensity);
+            updateDensityButtonLabel();
+            applyResultDensity();
+        });
+    }
+
+    if (btnToggleColumnWrap) {
+        btnToggleColumnWrap.addEventListener('click', () => {
+            resultColumnWrap = !resultColumnWrap;
+            localStorage.setItem(RESULT_COLUMN_WRAP_KEY, resultColumnWrap);
+            updateColumnWrapButtonLabel();
+            applyResultColumnWrap();
+        });
+    }
+
     // ── Utilità ──────────────────────────────────────────────────────────────
+    function updateDensityButtonLabel() {
+        if (!btnToggleDensity) {
+            return;
+        }
+        btnToggleDensity.textContent = resultDensity === 'compact' ? 'Vista estesa' : 'Vista compatta';
+    }
+
+    function updateColumnWrapButtonLabel() {
+        if (!btnToggleColumnWrap) {
+            return;
+        }
+        btnToggleColumnWrap.textContent = resultColumnWrap ? 'Colonne strette' : 'Adatta colonne';
+    }
+
+    function applyResultDensity() {
+        try {
+            const frameDoc = resultFrame.contentDocument;
+            if (!frameDoc || !frameDoc.body) {
+                return;
+            }
+            frameDoc.body.setAttribute('data-density', resultDensity);
+        } catch (e) {
+            // Se il contenuto non e accessibile, resta lo stile originale.
+        }
+    }
+
+    function applyResultColumnWrap() {
+        try {
+            const frameDoc = resultFrame.contentDocument;
+            if (!frameDoc || !frameDoc.body) {
+                return;
+            }
+            frameDoc.body.setAttribute('data-column-wrap', resultColumnWrap ? 'true' : 'false');
+        } catch (e) {
+            // Se il contenuto non e accessibile, resta lo stile originale.
+        }
+    }
+
+    function applyResultTableTheme() {
+        try {
+            const frameDoc = resultFrame.contentDocument;
+            if (!frameDoc || !frameDoc.head) {
+                return;
+            }
+
+            if (frameDoc.getElementById('editor-result-table-theme')) {
+                return;
+            }
+
+            const style = frameDoc.createElement('style');
+            style.id = 'editor-result-table-theme';
+            style.textContent = `
+                body {
+                    margin: 0;
+                    padding: 14px;
+                    font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+                    background: linear-gradient(180deg, #f8fbfd 0%, #ffffff 100%);
+                    color: #17353c;
+                }
+
+                .table-wrap {
+                    border: 1px solid #d2e2e8;
+                    border-radius: 10px;
+                    overflow: auto;
+                    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+                    background: #fff;
+                }
+
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    min-width: 780px;
+                }
+
+                thead th {
+                    position: sticky;
+                    top: 0;
+                    z-index: 2;
+                    background: linear-gradient(180deg, #e7f3f8 0%, #d7ebf3 100%);
+                    color: #16363d;
+                    text-transform: uppercase;
+                    letter-spacing: 0.03em;
+                    font-size: 0.74rem;
+                    font-weight: 700;
+                    border-bottom: 1px solid #b9d5df;
+                }
+
+                th, td {
+                    padding: 9px 10px;
+                    border-bottom: 1px solid #e5eef2;
+                    text-align: left;
+                    vertical-align: top;
+                    font-size: 0.84rem;
+                    white-space: nowrap;
+                }
+
+                body[data-density="compact"] th,
+                body[data-density="compact"] td {
+                    padding: 5px 7px;
+                    font-size: 0.76rem;
+                }
+
+                body[data-density="compact"] thead th {
+                    font-size: 0.68rem;
+                }
+
+                body[data-density="compact"] table {
+                    min-width: 640px;
+                }
+
+                body[data-column-wrap="true"] th,
+                body[data-column-wrap="true"] td {
+                    white-space: normal;
+                    max-width: 200px;
+                    word-break: break-word;
+                }
+
+                tbody tr:nth-child(even) {
+                    background: #f8fbfe;
+                }
+
+                tbody tr:hover {
+                    background: #eef7fb;
+                }
+
+                caption {
+                    caption-side: top;
+                    text-align: left;
+                    padding: 0 0 10px;
+                    font-weight: 600;
+                    color: #30545c;
+                }
+            `;
+            frameDoc.head.appendChild(style);
+
+            frameDoc.querySelectorAll('table').forEach((table) => {
+                if (!table.parentElement || !table.parentElement.classList.contains('table-wrap')) {
+                    const wrap = frameDoc.createElement('div');
+                    wrap.className = 'table-wrap';
+                    table.parentNode.insertBefore(wrap, table);
+                    wrap.appendChild(table);
+                }
+            });
+        } catch (e) {
+            // Se il contenuto non e accessibile, resta lo stile originale.
+        }
+    }
+
     function showMsg(text, ok) {
         ajaxMsg.textContent = text;
         ajaxMsg.className = 'msg-bar ' + (ok ? 'ok' : 'ko');
@@ -555,6 +972,9 @@
         runSpinner.style.display = busy ? 'inline-block' : 'none';
         document.body.classList.toggle('is-busy', busy);
     }
+
+    updateDensityButtonLabel();
+    updateColumnWrapButtonLabel();
 
     // Sincronizza scriptSelect con il valore preselezionato da Thymeleaf
     const preselected = currentBadge.textContent.trim();

@@ -185,24 +185,50 @@ public class QueryOutputHtmlService {
         StringBuilder sb = new StringBuilder();
         sb.append("<!DOCTYPE html><html lang=\"it\"><head>")
           .append("<meta charset=\"UTF-8\">")
+          .append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">")
           .append("<title>Output: ").append(escapeHtml(procedureName)).append("</title>")
           .append("<style>")
-          .append("body{font-family:sans-serif;margin:2rem;background:#f5f7fa;color:#222}")
-          .append("h1{color:#1e3a5f}p.meta{color:#666;font-size:.9rem}")
-          .append("table{border-collapse:collapse;width:100%;margin-top:1rem}")
-          .append("th{background:#1e3a5f;color:#fff;padding:8px 14px;text-align:left;font-weight:600}")
-          .append("td{padding:7px 14px;border-bottom:1px solid #dde3ec;vertical-align:top}")
-          .append("tr:nth-child(even) td{background:#eef2f8}")
-          .append("tr:hover td{background:#dce7f5}")
-          .append(".count{margin-top:.75rem;font-size:.9rem;color:#555}")
+          .append(":root { --ink: #102529; --accent: #05668d; --ok: #198754; --line: #d6ccb8; }")
+          .append("*{box-sizing:border-box}")
+          .append("body{")
+          .append("  margin:0;padding:16px;")
+          .append("  font-family:\"Trebuchet MS\",\"Segoe UI\",sans-serif;")
+          .append("  background:linear-gradient(180deg,#f8fbfd 0%,#ffffff 100%);")
+          .append("  color:var(--ink);")
+          .append("}")
+          .append("h1{margin:0 0 0.5rem;font-size:1.5rem;color:var(--ink);letter-spacing:0.5px}")
+          .append(".header{display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap;margin-bottom:1rem}")
+          .append(".toolbar{display:flex;gap:0.4rem;align-items:center;flex-wrap:wrap;margin-bottom:0.8rem}")
+          .append("p.meta{margin:0 0 0.3rem;color:#5b6f72;font-size:0.9rem;letter-spacing:0.02em}")
+          .append(".btn{border:none;border-radius:6px;padding:0.35rem 0.85rem;font-weight:600;font-size:0.85rem;cursor:pointer;transition:filter 0.15s,transform 0.1s;white-space:nowrap}")
+          .append(".btn:hover{filter:brightness(1.1)}")
+          .append(".btn:active{transform:scale(0.97)}")
+          .append(".btn-toggle{background:#e8e2d8;color:var(--ink)}")
+          .append(".table-wrap{border:1px solid #d2e2e8;border-radius:10px;overflow:auto;box-shadow:0 6px 16px rgba(0,0,0,0.06);background:#fff;margin-top:1rem}")
+          .append("table{width:100%;border-collapse:collapse;min-width:780px}")
+          .append("thead th{position:sticky;top:0;z-index:2;background:linear-gradient(180deg,#e7f3f8 0%,#d7ebf3 100%);color:#16363d;text-transform:uppercase;letter-spacing:0.03em;font-size:0.74rem;font-weight:700;border-bottom:1px solid #b9d5df}")
+          .append("th,td{padding:9px 10px;border-bottom:1px solid #e5eef2;text-align:left;vertical-align:top;font-size:0.84rem;white-space:nowrap}")
+          .append("tbody tr:nth-child(even) td{background:#f8fbfe}")
+          .append("tbody tr:hover td{background:#eef7fb}")
+          .append("body[data-density=\"compact\"] th,body[data-density=\"compact\"] td{padding:5px 7px;font-size:0.76rem}")
+          .append("body[data-density=\"compact\"] thead th{font-size:0.68rem}")
+          .append("body[data-density=\"compact\"] table{min-width:640px}")
+          .append("body[data-column-wrap=\"true\"] th,body[data-column-wrap=\"true\"] td{white-space:normal;max-width:200px;word-break:break-word}")
+          .append(".count{margin-top:0.75rem;font-size:0.9rem;color:#5b6f72}")
           .append("</style></head><body>")
-          .append("<h1>Output: ").append(escapeHtml(procedureName)).append("</h1>")
-          .append("<p class=\"meta\">Generato il: ").append(escapeHtml(timestamp)).append("</p>");
+          .append("<div class=\"header\">")
+          .append("<div style=\"flex:1\"><h1>").append(escapeHtml(procedureName)).append("</h1>")
+          .append("<p class=\"meta\">Generato il: ").append(escapeHtml(timestamp)).append("</p></div>")
+          .append("<div class=\"toolbar\">")
+          .append("<button class=\"btn btn-toggle\" onclick=\"toggleDensity()\">Vista compatta</button>")
+          .append("<button class=\"btn btn-toggle\" onclick=\"toggleColumnWrap()\">Colonne strette</button>")
+          .append("</div>")
+          .append("</div>");
 
         if (rows == null || rows.isEmpty()) {
             sb.append("<p>Nessun risultato restituito dallo script.</p>");
         } else {
-            sb.append("<table><thead><tr>");
+            sb.append("<div class=\"table-wrap\"><table><thead><tr>");
             rows.get(0).keySet().forEach(col ->
                 sb.append("<th>").append(escapeHtml(String.valueOf(col))).append("</th>")
             );
@@ -214,10 +240,33 @@ public class QueryOutputHtmlService {
                 );
                 sb.append("</tr>");
             }
-            sb.append("</tbody></table>");
+            sb.append("</tbody></table></div>");
             sb.append("<p class=\"count\">").append(rows.size()).append(" righe restituite.</p>");
         }
-        sb.append("</body></html>");
+
+        sb.append("<script>")
+          .append("const DENSITY_KEY='cruscotto.output.density';const WRAP_KEY='cruscotto.output.columnWrap';")
+          .append("let density=localStorage.getItem(DENSITY_KEY)||'comfortable';")
+          .append("let columnWrap=localStorage.getItem(WRAP_KEY)==='true';")
+          .append("document.body.setAttribute('data-density',density);")
+          .append("document.body.setAttribute('data-column-wrap',columnWrap?'true':'false');")
+          .append("function toggleDensity(){")
+          .append("density=density==='compact'?'comfortable':'compact';")
+          .append("localStorage.setItem(DENSITY_KEY,density);")
+          .append("document.body.setAttribute('data-density',density);")
+          .append("event.target.textContent=density==='compact'?'Vista estesa':'Vista compatta';")
+          .append("}")
+          .append("function toggleColumnWrap(){")
+          .append("columnWrap=!columnWrap;")
+          .append("localStorage.setItem(WRAP_KEY,columnWrap);")
+          .append("document.body.setAttribute('data-column-wrap',columnWrap?'true':'false');")
+          .append("event.target.textContent=columnWrap?'Colonne strette':'Adatta colonne';")
+          .append("}")
+          .append("document.querySelectorAll('button')[0].textContent=density==='compact'?'Vista estesa':'Vista compatta';")
+          .append("document.querySelectorAll('button')[1].textContent=columnWrap?'Colonne strette':'Adatta colonne';")
+          .append("</script>")
+          .append("</body></html>");
+
         return sb.toString();
     }
 

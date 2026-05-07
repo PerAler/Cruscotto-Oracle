@@ -78,6 +78,19 @@ public class ExecutionLogOracleStore {
             WHERE STATUS = 'KO'
             """;
 
+    private static final String TRIM_TO_MAX_ROWS_SQL = """
+            DELETE FROM CRUSCOTTO_EXEC_LOG
+            WHERE ROWID IN (
+                SELECT RID
+                FROM (
+                    SELECT ROWID AS RID,
+                           ROW_NUMBER() OVER (ORDER BY EVENT_TS DESC, ROWID DESC) AS RN
+                    FROM CRUSCOTTO_EXEC_LOG
+                )
+                WHERE RN > ?
+            )
+            """;
+
             private static final String SELECT_LATEST_SQL = """
                  SELECT EVENT_TS,
                      PROCEDURE_NAME,
@@ -209,6 +222,23 @@ public class ExecutionLogOracleStore {
             return jdbcTemplate.update(DELETE_ALL_ERRORS_SQL);
         } catch (Exception ex) {
             logger.warn("Cancellazione completa errori non riuscita: {}", ex.getMessage());
+            persistenceAvailable.set(false);
+            return 0;
+        }
+    }
+
+    public int trimToMaxRows(int maxRows) {
+        if (!persistenceEnabled || maxRows <= 0) {
+            return 0;
+        }
+        if (!ensureStoreReady()) {
+            return 0;
+        }
+
+        try {
+            return jdbcTemplate.update(TRIM_TO_MAX_ROWS_SQL, maxRows);
+        } catch (Exception ex) {
+            logger.warn("Retention log persistiti non riuscita: {}", ex.getMessage());
             persistenceAvailable.set(false);
             return 0;
         }

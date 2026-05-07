@@ -2,6 +2,15 @@
 
 Tutte le modifiche rilevanti a questo progetto sono documentate in questo file.
 
+## [1.0.1] - 2026-05-07
+### Added
+- Link cliccabile a output HTML nel mini editor SQL rapido della dashboard dopo esecuzione query.
+- Recupero automatico del nome file HTML generato dall'ultima entry di log per visualizzazione link.
+
+### Changed
+- Metodo `runEditorQuery` del DashboardController esteso per tracciare e passare il nome file output.
+- Versione incrementata da 1.0.0 a 1.0.1.
+
 ## [1.0.0] - 2026-05-05
 ### Added
 - Export risultati in formato CSV e XLSX oltre all'HTML.

@@ -18,7 +18,7 @@ public class ExecutionLogService {
     private final ExecutionLogOracleStore oracleStore;
     private final Deque<ExecutionLogEntry> logBuffer = new ArrayDeque<>();
 
-    public ExecutionLogService(@Value("${app.logs.max-size:300}") int maxSize,
+    public ExecutionLogService(@Value("${app.logs.max-size:100}") int maxSize,
                                ExecutionLogOracleStore oracleStore) {
         this.maxSize = maxSize;
         this.oracleStore = oracleStore;
@@ -26,6 +26,7 @@ public class ExecutionLogService {
 
     @PostConstruct
     public synchronized void warmupFromPersistentStore() {
+        oracleStore.trimToMaxRows(maxSize);
         List<ExecutionLogEntry> persisted = oracleStore.loadLatest(maxSize);
         logBuffer.clear();
         for (ExecutionLogEntry entry : persisted) {
@@ -40,6 +41,7 @@ public class ExecutionLogService {
             logBuffer.removeLast();
         }
         oracleStore.persist(entry);
+        oracleStore.trimToMaxRows(maxSize);
     }
 
     public synchronized List<ExecutionLogEntry> latest() {
