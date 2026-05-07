@@ -2,6 +2,14 @@
 
 Tutte le modifiche rilevanti a questo progetto sono documentate in questo file.
 
+## [1.0.2] - 2026-05-07
+### Added
+- Dialog di scelta per i file XLSX: opzione di apertura nel browser o download diretto.
+- Event listener JavaScript sui link XLSX in logs.html con modal `confirm()`.
+
+### Changed
+- Link XLSX in logs.html aggiornati con attributi `data-xlsx-file` e `data-xlsx-view`.
+
 ## [1.0.1] - 2026-05-07
 ### Added
 - Link cliccabile a output HTML nel mini editor SQL rapido della dashboard dopo esecuzione query.

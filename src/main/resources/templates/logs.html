@@ -64,7 +64,10 @@
                     <div th:if="${log.outputHtmlFile() != null}" class="output-links">
                         <a th:href="@{'/output/' + ${log.outputHtmlFile()}}" target="_blank" class="output-link">HTML</a>
                         <a th:href="@{'/output/download/' + ${#strings.replace(log.outputHtmlFile(), '.html', '.csv')}}" class="output-link secondary-link">CSV</a>
-                        <a th:href="@{'/output/download/' + ${#strings.replace(log.outputHtmlFile(), '.html', '.xlsx')}}" class="output-link secondary-link">XLSX</a>
+                        <a href="#" 
+                           th:data-xlsx-file="@{'/output/download/' + ${#strings.replace(log.outputHtmlFile(), '.html', '.xlsx')}}"
+                           th:data-xlsx-view="@{'/output/' + ${#strings.replace(log.outputHtmlFile(), '.html', '.xlsx')}}"
+                           class="output-link secondary-link xlsx-link">XLSX</a>
                     </div>
                     <span th:if="${log.outputHtmlFile() == null}" class="no-output">—</span>
                 </td>
@@ -127,6 +130,24 @@
         }
         applyLogFilters();
     })();
+
+    // Dialog per scelta apertura/download XLSX
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.xlsx-link').forEach(function(link) {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                var downloadUrl = this.getAttribute('data-xlsx-file');
+                var viewUrl = this.getAttribute('data-xlsx-view');
+                
+                var choices = confirm('Scegli come visualizzare il file XLSX:\n\nOK = Apri nel browser\nAnnulla = Scarica il file');
+                if (choices) {
+                    window.open(viewUrl, '_blank');
+                } else {
+                    window.location.href = downloadUrl;
+                }
+            });
+        });
+    });
 </script>
 </body>
 </html>
