@@ -27,6 +27,7 @@ import java.util.stream.Stream;
 public class QueryOutputHtmlService {
 
     private static final DateTimeFormatter FILE_TS = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
+    private static final int MAX_HTML_SIZE = 32767;  // Excel cell limit
 
     private final Path outputDir;
     private final int maxOutputItems;
@@ -47,18 +48,28 @@ public class QueryOutputHtmlService {
     }
 
     /**
-     * Salva i risultati della query come file HTML nella cartella di output.
+     * Salva i risultati della query come file CSV e XLSX nella cartella di output.
+     * Se il risultato HTML supera il limite di 32767 caratteri, il file HTML non viene generato.
      *
-     * @return il nome del file generato (es. "MioScript_20260422_143000.html")
+     * @return il nome del file base (es. "MioScript_20260422_143000.html" se HTML generato, 
+     *         o null se solo CSV/XLSX sono stati generati)
      */
     public String saveAsHtml(String procedureName, List<Map<String, Object>> rows) throws IOException {
         String timestamp = LocalDateTime.now().format(FILE_TS);
         String baseName = sanitizeFilename(procedureName) + "_" + timestamp;
 
-        String htmlFilename = baseName + ".html";
-        Path htmlFile = outputDir.resolve(htmlFilename);
-        Files.writeString(htmlFile, buildHtml(procedureName, rows, timestamp), StandardCharsets.UTF_8);
+        // Generate HTML content in memory first to check size
+        String htmlContent = buildHtml(procedureName, rows, timestamp);
+        String htmlFilename = null;
+        
+        // Save HTML only if it doesn't exceed the limit
+        if (htmlContent.length() <= MAX_HTML_SIZE) {
+            htmlFilename = baseName + ".html";
+            Path htmlFile = outputDir.resolve(htmlFilename);
+            Files.writeString(htmlFile, htmlContent, StandardCharsets.UTF_8);
+        }
 
+        // Always save CSV and XLSX
         Path csvFile = outputDir.resolve(baseName + ".csv");
         Files.writeString(csvFile, buildCsv(rows), StandardCharsets.UTF_8);
 
@@ -76,22 +87,59 @@ public class QueryOutputHtmlService {
         }
 
         try (Stream<Path> files = Files.list(outputDir)) {
-            List<Path> htmlOutputs = files
+            // Estrai nomi base unici (rimuovi estensione) per contare i bundle
+            List<String> allFiles = files
                     .filter(Files::isRegularFile)
-                    .filter(path -> path.getFileName().toString().toLowerCase().endsWith(".html"))
-                    .sorted(Comparator.comparingLong(this::lastModifiedMillis).reversed())
+                    .map(p -> p.getFileName().toString())
                     .toList();
 
-            if (htmlOutputs.size() <= maxOutputItems) {
+            // Estrai timestamp base (es. "SQL_Editor_20260507_161333" da "SQL_Editor_20260507_161333.html")
+            java.util.Set<String> uniqueBundles = new java.util.LinkedHashSet<>();
+            for (String filename : allFiles) {
+                String baseName = filename;
+                if (filename.endsWith(".html") || filename.endsWith(".csv") || filename.endsWith(".xlsx")) {
+                    baseName = filename.substring(0, filename.lastIndexOf('.'));
+                }
+                uniqueBundles.add(baseName);
+            }
+
+            if (uniqueBundles.size() <= maxOutputItems) {
                 return;
             }
 
-            for (int i = maxOutputItems; i < htmlOutputs.size(); i++) {
-                deleteOutputBundle(htmlOutputs.get(i));
+            // Ordina i bundle per data modificazione (più recenti prima)
+            List<String> sortedBundles = uniqueBundles.stream()
+                    .sorted((b1, b2) -> Long.compare(
+                            getNewestFileTimestamp(b2),
+                            getNewestFileTimestamp(b1)
+                    ))
+                    .toList();
+
+            // Elimina i bundle più vecchi
+            for (int i = maxOutputItems; i < sortedBundles.size(); i++) {
+                deleteBundleByName(sortedBundles.get(i));
             }
         } catch (Exception ignored) {
             // Retention best-effort: non deve interrompere l'esecuzione della query.
         }
+    }
+
+    private long getNewestFileTimestamp(String baseName) {
+        long maxTime = 0L;
+        for (String ext : new String[]{".html", ".csv", ".xlsx"}) {
+            Path p = outputDir.resolve(baseName + ext);
+            long time = lastModifiedMillis(p);
+            if (time > maxTime) {
+                maxTime = time;
+            }
+        }
+        return maxTime;
+    }
+
+    private void deleteBundleByName(String baseName) {
+        deleteQuietly(outputDir.resolve(baseName + ".html"));
+        deleteQuietly(outputDir.resolve(baseName + ".csv"));
+        deleteQuietly(outputDir.resolve(baseName + ".xlsx"));
     }
 
     private long lastModifiedMillis(Path path) {
@@ -100,18 +148,6 @@ public class QueryOutputHtmlService {
         } catch (IOException ex) {
             return 0L;
         }
-    }
-
-    private void deleteOutputBundle(Path htmlFile) {
-        String name = htmlFile.getFileName().toString();
-        if (!name.toLowerCase().endsWith(".html")) {
-            return;
-        }
-
-        String baseName = name.substring(0, name.length() - 5);
-        deleteQuietly(outputDir.resolve(baseName + ".html"));
-        deleteQuietly(outputDir.resolve(baseName + ".csv"));
-        deleteQuietly(outputDir.resolve(baseName + ".xlsx"));
     }
 
     private void deleteQuietly(Path path) {
@@ -161,7 +197,7 @@ public class QueryOutputHtmlService {
             Row headerRow = sheet.createRow(0);
             for (int i = 0; i < columns.size(); i++) {
                 Cell headerCell = headerRow.createCell(i);
-                headerCell.setCellValue(columns.get(i));
+                headerCell.setCellValue(truncateCellValue(columns.get(i)));
             }
 
             for (int rowIndex = 0; rowIndex < rows.size(); rowIndex++) {
@@ -169,7 +205,8 @@ public class QueryOutputHtmlService {
                 Row excelRow = sheet.createRow(rowIndex + 1);
                 for (int colIndex = 0; colIndex < columns.size(); colIndex++) {
                     Object value = rowData.get(columns.get(colIndex));
-                    excelRow.createCell(colIndex).setCellValue(value == null ? "" : String.valueOf(value));
+                    String cellValue = value == null ? "" : String.valueOf(value);
+                    excelRow.createCell(colIndex).setCellValue(truncateCellValue(cellValue));
                 }
             }
 
@@ -179,6 +216,17 @@ public class QueryOutputHtmlService {
 
             workbook.write(outputStream);
         }
+    }
+
+    private String truncateCellValue(String value) {
+        // Apache POI limit: 32767 characters per cell
+        if (value == null) {
+            return "";
+        }
+        if (value.length() > 32767) {
+            return value.substring(0, 32764) + "...";
+        }
+        return value;
     }
 
     private String buildHtml(String procedureName, List<Map<String, Object>> rows, String timestamp) {

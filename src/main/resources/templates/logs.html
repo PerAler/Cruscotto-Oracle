@@ -66,7 +66,7 @@
                         <a th:href="@{'/output/download/' + ${#strings.replace(log.outputHtmlFile(), '.html', '.csv')}}" class="output-link secondary-link">CSV</a>
                         <a href="#" 
                            th:data-xlsx-file="@{'/output/download/' + ${#strings.replace(log.outputHtmlFile(), '.html', '.xlsx')}}"
-                           th:data-xlsx-view="@{'/output/' + ${#strings.replace(log.outputHtmlFile(), '.html', '.xlsx')}}"
+                           th:data-xlsx-view="@{'/output/download/' + ${#strings.replace(log.outputHtmlFile(), '.html', '.xlsx')}}"
                            class="output-link secondary-link xlsx-link">XLSX</a>
                     </div>
                     <span th:if="${log.outputHtmlFile() == null}" class="no-output">—</span>

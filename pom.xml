@@ -11,7 +11,7 @@
 
     <groupId>com.example</groupId>
     <artifactId>cruscotto-oracle</artifactId>
-    <version>1.0.2</version>
+    <version>1.0.3</version>
     <packaging>war</packaging>
     <name>cruscotto-oracle</name>
     <description>Cruscotto Spring Boot per esecuzione procedure Oracle</description>

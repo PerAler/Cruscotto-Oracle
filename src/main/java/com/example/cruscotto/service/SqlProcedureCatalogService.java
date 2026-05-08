@@ -119,21 +119,51 @@ public class SqlProcedureCatalogService {
     }
 
     public synchronized String updateSqlFile(String existingName, String sqlText) {
-        String normalizedName = normalizeBaseName(existingName);
-        if (normalizedName.isBlank()) {
+        String normalizedSql = sqlText == null ? "" : sqlText.trim();
+        if (normalizedSql.isBlank()) {
+            throw new IllegalArgumentException("SQL vuoto: impossibile salvare il file");
+        }
+        validateReadOnlySql(normalizedSql);
+
+        if (existingName == null || existingName.isBlank()) {
             throw new IllegalArgumentException("Seleziona uno script valido da aggiornare");
         }
 
-        Path sqlDir = Paths.get("src", "main", "resources", "sql").toAbsolutePath().normalize();
-        Path sqlFile = sqlDir.resolve(normalizedName + ".sql").normalize();
-        if (!sqlFile.startsWith(sqlDir)) {
-            throw new IllegalArgumentException("Percorso file non valido");
-        }
-        if (!Files.exists(sqlFile)) {
-            throw new IllegalArgumentException("Script '" + normalizedName + "' non trovato");
+        // Controlla se il nome esatto esiste nella mappa delle procedure (con gli spazi originali)
+        if (!procedures.containsKey(existingName)) {
+            // Fallback: prova con il nome normalizzato (per compatibilità)
+            String normalizedName = normalizeBaseName(existingName);
+            if (normalizedName.isBlank()) {
+                throw new IllegalArgumentException("Seleziona uno script valido da aggiornare");
+            }
+            return saveSqlFile(normalizedName, normalizedSql, true);
         }
 
-        return saveSqlFile(normalizedName, sqlText, true);
+        // Il file esiste nella mappa - salva con il nome originale (con spazi)
+        try {
+            // Tenta di salvare nella cartella src/main/resources/sql (utile per sviluppo)
+            Path sqlDir = Paths.get("src", "main", "resources", "sql").toAbsolutePath().normalize();
+            Path sqlFile = sqlDir.resolve(existingName + ".sql").normalize();
+            
+            // Se src/main/resources/sql non esiste, usa la cartella corrente
+            if (!Files.exists(sqlDir)) {
+                sqlDir = Paths.get(".").toAbsolutePath().normalize();
+                sqlFile = sqlDir.resolve("sql_updated").resolve(existingName + ".sql").normalize();
+            }
+            
+            // Verifica che il file sia nella cartella consentita
+            if (!sqlFile.startsWith(sqlDir)) {
+                throw new IllegalArgumentException("Percorso file non valido");
+            }
+
+            String content = normalizedSql.endsWith("\n") ? normalizedSql : normalizedSql + System.lineSeparator();
+            Files.createDirectories(sqlFile.getParent());
+            Files.writeString(sqlFile, content, StandardCharsets.UTF_8);
+            reloadProcedures();
+            return existingName;
+        } catch (IOException ex) {
+            throw new IllegalStateException("Errore durante il salvataggio del file SQL: " + ex.getMessage(), ex);
+        }
     }
 
     private void validateReadOnlySql(String sqlText) {
