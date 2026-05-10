@@ -33,7 +33,7 @@
                 <option value="" th:selected="${logStatusFilter == null or logStatusFilter == ''}">Tutti gli stati</option>
                 <option value="OK" th:selected="${logStatusFilter == 'OK'}">Solo OK</option>
                 <option value="KO" th:selected="${logStatusFilter == 'KO'}">Solo KO</option>
-                <option value="HAS_OUTPUT" th:selected="${logStatusFilter == 'HAS_OUTPUT'}">Solo con output HTML</option>
+                <option value="HAS_OUTPUT" th:selected="${logStatusFilter == 'HAS_OUTPUT'}">Solo con output</option>
             </select>
             <p id="logFilterCounter" class="log-counter"></p>
         </div>
@@ -61,12 +61,13 @@
                 <td th:text="${log.message()}"></td>
                 <td th:text="${log.parameters()}"></td>
                 <td>
-                    <div th:if="${log.outputHtmlFile() != null}" class="output-links">
-                        <a th:href="@{'/output/' + ${log.outputHtmlFile()}}" target="_blank" class="output-link">HTML</a>
-                        <a th:href="@{'/output/download/' + ${#strings.replace(log.outputHtmlFile(), '.html', '.csv')}}" class="output-link secondary-link">CSV</a>
+                    <div th:if="${log.outputHtmlFile() != null}" class="output-links"
+                         th:with="csvFile=${#strings.endsWith(log.outputHtmlFile(), '.csv') ? log.outputHtmlFile() : #strings.replace(log.outputHtmlFile(), '.html', '.csv')},htmlFile=${#strings.endsWith(log.outputHtmlFile(), '.html') ? log.outputHtmlFile() : #strings.replace(log.outputHtmlFile(), '.csv', '.html')},xlsxFile=${#strings.endsWith(log.outputHtmlFile(), '.xlsx') ? log.outputHtmlFile() : (#strings.endsWith(log.outputHtmlFile(), '.csv') ? #strings.replace(log.outputHtmlFile(), '.csv', '.xlsx') : #strings.replace(log.outputHtmlFile(), '.html', '.xlsx'))}">
+                        <a th:href="@{'/output/' + ${htmlFile}}" target="_blank" class="output-link">HTML</a>
+                        <a th:href="@{'/output/download/' + ${csvFile}}" class="output-link secondary-link">CSV</a>
                         <a href="#" 
-                           th:data-xlsx-file="@{'/output/download/' + ${#strings.replace(log.outputHtmlFile(), '.html', '.xlsx')}}"
-                           th:data-xlsx-view="@{'/output/download/' + ${#strings.replace(log.outputHtmlFile(), '.html', '.xlsx')}}"
+                           th:data-xlsx-file="@{'/output/download/' + ${xlsxFile}}"
+                           th:data-xlsx-view="@{'/output/download/' + ${xlsxFile}}"
                            class="output-link secondary-link xlsx-link">XLSX</a>
                     </div>
                     <span th:if="${log.outputHtmlFile() == null}" class="no-output">—</span>

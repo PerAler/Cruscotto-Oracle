@@ -289,12 +289,12 @@ public class DashboardController {
             String label = (queryLabel == null || queryLabel.isBlank()) ? "SQL Editor" : queryLabel.trim();
             successMessage = label + ": " + message;
             
-            // Recupera l'ultima entry di log per estrarre il nome del file HTML
+            // Recupera l'ultima entry di log per estrarre il nome del file output
             List<com.example.cruscotto.model.ExecutionLogEntry> latest = executionLogService.latest();
             if (!latest.isEmpty()) {
-                String outputHtmlFile = latest.get(0).outputHtmlFile();
-                if (outputHtmlFile != null && !outputHtmlFile.isBlank()) {
-                    outputFile = outputHtmlFile;
+                String outputReference = latest.get(0).outputHtmlFile();
+                if (outputReference != null && !outputReference.isBlank()) {
+                    outputFile = queryOutputHtmlService.toHtmlFilename(outputReference);
                 }
             }
         } catch (Exception ex) {
@@ -375,17 +375,31 @@ public class DashboardController {
      */
     @GetMapping("/output/{filename:.+}")
     @ResponseBody
-    public ResponseEntity<String> viewOutput(@PathVariable String filename) throws IOException {
+    public ResponseEntity<String> viewOutput(@PathVariable String filename,
+                                             @RequestParam(value = "page", required = false, defaultValue = "1") int page,
+                                             @RequestParam(value = "size", required = false, defaultValue = "200") int size) throws IOException {
         Path outputDir = queryOutputHtmlService.getOutputDir();
         Path file = outputDir.resolve(filename).normalize();
         if (!file.startsWith(outputDir)) {
             return ResponseEntity.badRequest().build();
         }
+
+        if (filename.endsWith(".html")) {
+            String htmlFromCsv = queryOutputHtmlService.buildHtmlFromCsv(filename, page, size);
+            if (htmlFromCsv != null) {
+                return ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(htmlFromCsv);
+            }
+        }
+
         if (!Files.exists(file)) {
             return ResponseEntity.notFound().build();
         }
+
         String content = Files.readString(file, StandardCharsets.UTF_8);
-        return ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(content);
+        MediaType contentType = filename.endsWith(".csv")
+                ? MediaType.parseMediaType("text/csv")
+                : MediaType.TEXT_HTML;
+        return ResponseEntity.ok().contentType(contentType).body(content);
     }
 
     @GetMapping("/output/download/{filename:.+}")
@@ -396,6 +410,23 @@ public class DashboardController {
         if (!file.startsWith(outputDir)) {
             return ResponseEntity.badRequest().build();
         }
+
+        if (filename.endsWith(".xlsx") && !Files.exists(file)) {
+            byte[] generated = queryOutputHtmlService.buildXlsxFromCsv(filename);
+            if (generated == null) {
+                return ResponseEntity.notFound().build();
+            }
+            ByteArrayResource resource = new ByteArrayResource(generated);
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                    .header(HttpHeaders.CONTENT_DISPOSITION,
+                            ContentDisposition.attachment()
+                                    .filename(file.getFileName().toString(), StandardCharsets.UTF_8)
+                                    .build()
+                                    .toString())
+                    .body(resource);
+        }
+
         if (!Files.exists(file)) {
             return ResponseEntity.notFound().build();
         }
@@ -609,7 +640,7 @@ public class DashboardController {
             result.put("message", message);
             List<com.example.cruscotto.model.ExecutionLogEntry> logs = executionLogService.latest();
             if (!logs.isEmpty() && logs.get(0).outputHtmlFile() != null) {
-                result.put("outputUrl", "/output/" + logs.get(0).outputHtmlFile());
+                result.put("outputUrl", "/output/" + queryOutputHtmlService.toHtmlFilename(logs.get(0).outputHtmlFile()));
             }
         } catch (Exception ex) {
             result.put("ok", false);

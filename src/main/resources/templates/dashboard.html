@@ -32,7 +32,7 @@
         <p class="ok" th:if="${successMessage != null}" th:text="${successMessage}"></p>
         <p class="ok" th:if="${successMessage != null and outputFile != null}">
             <a th:href="@{/output/{filename}(filename=${outputFile})}" target="_blank" rel="noopener"
-               style="color:#155724;font-weight:600;text-decoration:underline">▶ Visualizza output HTML</a>
+             style="color:#155724;font-weight:600;text-decoration:underline">▶ Visualizza output (HTML da CSV)</a>
         </p>
         <p class="ko" th:if="${errorMessage != null}" th:text="${errorMessage}"></p>
     </section>
@@ -51,7 +51,7 @@
             <p class="stat-value" th:text="${errorCount}">0</p>
         </a>
         <article class="card stat-card stat-output">
-            <p class="stat-label">Output HTML</p>
+            <p class="stat-label">Output disponibili</p>
             <p class="stat-value" th:text="${outputCount}">0</p>
         </article>
     </section>

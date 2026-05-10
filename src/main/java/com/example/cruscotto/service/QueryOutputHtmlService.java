@@ -1,6 +1,8 @@
 package com.example.cruscotto.service;
 
 import org.apache.poi.ss.usermodel.Cell;
+import org.apache.poi.ss.usermodel.CellStyle;
+import org.apache.poi.ss.usermodel.Font;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -10,7 +12,6 @@ import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,7 +19,6 @@ import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -27,7 +27,8 @@ import java.util.stream.Stream;
 public class QueryOutputHtmlService {
 
     private static final DateTimeFormatter FILE_TS = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss");
-    private static final int MAX_HTML_SIZE = 32767;  // Excel cell limit
+    private static final int DEFAULT_PAGE_SIZE = 200;
+    private static final int MAX_PAGE_SIZE = 1000;
 
     private final Path outputDir;
     private final int maxOutputItems;
@@ -48,37 +49,139 @@ public class QueryOutputHtmlService {
     }
 
     /**
-     * Salva i risultati della query come file CSV e XLSX nella cartella di output.
-     * Se il risultato HTML supera il limite di 32767 caratteri, il file HTML non viene generato.
+     * Salva i risultati della query in formato CSV nella cartella di output.
+     * Gli output HTML/XLSX vengono generati on-demand partendo dal CSV.
      *
-     * @return il nome del file base (es. "MioScript_20260422_143000.html" se HTML generato, 
-     *         o null se solo CSV/XLSX sono stati generati)
+     * @return il nome del file CSV generato (es. "MioScript_20260422_143000.csv")
      */
     public String saveAsHtml(String procedureName, List<Map<String, Object>> rows) throws IOException {
         String timestamp = LocalDateTime.now().format(FILE_TS);
         String baseName = sanitizeFilename(procedureName) + "_" + timestamp;
 
-        // Generate HTML content in memory first to check size
-        String htmlContent = buildHtml(procedureName, rows, timestamp);
-        String htmlFilename = null;
-        
-        // Save HTML only if it doesn't exceed the limit
-        if (htmlContent.length() <= MAX_HTML_SIZE) {
-            htmlFilename = baseName + ".html";
-            Path htmlFile = outputDir.resolve(htmlFilename);
-            Files.writeString(htmlFile, htmlContent, StandardCharsets.UTF_8);
-        }
-
-        // Always save CSV and XLSX
         Path csvFile = outputDir.resolve(baseName + ".csv");
         Files.writeString(csvFile, buildCsv(rows), StandardCharsets.UTF_8);
 
-        Path xlsxFile = outputDir.resolve(baseName + ".xlsx");
-        writeXlsx(xlsxFile, rows);
-
         enforceOutputRetention();
 
-        return htmlFilename;
+        return csvFile.getFileName().toString();
+    }
+
+    public String toCsvFilename(String filename) {
+        if (filename == null || filename.isBlank()) {
+            return filename;
+        }
+        if (filename.endsWith(".csv")) {
+            return filename;
+        }
+        if (filename.endsWith(".html")) {
+            return filename.substring(0, filename.length() - 5) + ".csv";
+        }
+        if (filename.endsWith(".xlsx")) {
+            return filename.substring(0, filename.length() - 5) + ".csv";
+        }
+        return filename + ".csv";
+    }
+
+    public String toHtmlFilename(String filename) {
+        if (filename == null || filename.isBlank()) {
+            return filename;
+        }
+        if (filename.endsWith(".html")) {
+            return filename;
+        }
+        if (filename.endsWith(".csv") || filename.endsWith(".xlsx")) {
+            return filename.substring(0, filename.lastIndexOf('.')) + ".html";
+        }
+        return filename + ".html";
+    }
+
+    public String toXlsxFilename(String filename) {
+        if (filename == null || filename.isBlank()) {
+            return filename;
+        }
+        if (filename.endsWith(".xlsx")) {
+            return filename;
+        }
+        if (filename.endsWith(".csv") || filename.endsWith(".html")) {
+            return filename.substring(0, filename.lastIndexOf('.')) + ".xlsx";
+        }
+        return filename + ".xlsx";
+    }
+
+    public String buildHtmlFromCsv(String requestedHtmlFilename, int page, int pageSize) throws IOException {
+        String csvFilename = toCsvFilename(requestedHtmlFilename);
+        Path csvPath = outputDir.resolve(csvFilename).normalize();
+        if (!csvPath.startsWith(outputDir) || !Files.exists(csvPath)) {
+            return null;
+        }
+
+        String csvContent = Files.readString(csvPath, StandardCharsets.UTF_8);
+        List<List<String>> parsed = parseCsv(csvContent);
+        if (parsed.isEmpty()) {
+            return buildCsvBackedHtml(csvFilename, List.of(), List.of(), 1, 1, 0, normalizePageSize(pageSize));
+        }
+
+        List<String> header = parsed.get(0);
+        List<List<String>> rows = parsed.size() > 1 ? parsed.subList(1, parsed.size()) : List.of();
+        int safePageSize = normalizePageSize(pageSize);
+        int totalRows = rows.size();
+        int totalPages = Math.max(1, (int) Math.ceil(totalRows / (double) safePageSize));
+        int safePage = Math.min(Math.max(page, 1), totalPages);
+        int from = (safePage - 1) * safePageSize;
+        int to = Math.min(from + safePageSize, totalRows);
+        List<List<String>> pageRows = rows.subList(from, to);
+
+        return buildCsvBackedHtml(csvFilename, header, pageRows, safePage, totalPages, totalRows, safePageSize);
+    }
+
+    public byte[] buildXlsxFromCsv(String requestedXlsxFilename) throws IOException {
+        String csvFilename = toCsvFilename(requestedXlsxFilename);
+        Path csvPath = outputDir.resolve(csvFilename).normalize();
+        if (!csvPath.startsWith(outputDir) || !Files.exists(csvPath)) {
+            return null;
+        }
+
+        String csvContent = Files.readString(csvPath, StandardCharsets.UTF_8);
+        List<List<String>> parsed = parseCsv(csvContent);
+
+        try (Workbook workbook = new XSSFWorkbook(); java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream()) {
+            Sheet sheet = workbook.createSheet("output");
+
+            if (parsed.isEmpty()) {
+                Row emptyRow = sheet.createRow(0);
+                emptyRow.createCell(0).setCellValue("Nessun risultato");
+            } else {
+                List<String> header = parsed.get(0);
+
+                Font boldFont = workbook.createFont();
+                boldFont.setBold(true);
+                CellStyle headerStyle = workbook.createCellStyle();
+                headerStyle.setFont(boldFont);
+
+                Row headerRow = sheet.createRow(0);
+                for (int i = 0; i < header.size(); i++) {
+                    Cell headerCell = headerRow.createCell(i);
+                    headerCell.setCellStyle(headerStyle);
+                    headerCell.setCellValue(truncateCellValue(header.get(i)));
+                }
+
+                for (int rowIndex = 1; rowIndex < parsed.size(); rowIndex++) {
+                    List<String> rowData = parsed.get(rowIndex);
+                    Row excelRow = sheet.createRow(rowIndex);
+                    for (int colIndex = 0; colIndex < header.size(); colIndex++) {
+                        String value = colIndex < rowData.size() ? rowData.get(colIndex) : "";
+                        excelRow.createCell(colIndex).setCellValue(truncateCellValue(value));
+                    }
+                }
+
+                for (int i = 0; i < header.size(); i++) {
+                    sheet.autoSizeColumn(i);
+                }
+            }
+
+            workbook.write(baos);
+            return baos.toByteArray();
+        }
     }
 
     private void enforceOutputRetention() {
@@ -182,42 +285,6 @@ public class QueryOutputHtmlService {
         return csv.toString();
     }
 
-    private void writeXlsx(Path filePath, List<Map<String, Object>> rows) throws IOException {
-        try (Workbook workbook = new XSSFWorkbook(); OutputStream outputStream = Files.newOutputStream(filePath)) {
-            Sheet sheet = workbook.createSheet("output");
-
-            if (rows == null || rows.isEmpty()) {
-                Row emptyRow = sheet.createRow(0);
-                emptyRow.createCell(0).setCellValue("Nessun risultato");
-                workbook.write(outputStream);
-                return;
-            }
-
-            List<String> columns = new ArrayList<>(rows.get(0).keySet());
-            Row headerRow = sheet.createRow(0);
-            for (int i = 0; i < columns.size(); i++) {
-                Cell headerCell = headerRow.createCell(i);
-                headerCell.setCellValue(truncateCellValue(columns.get(i)));
-            }
-
-            for (int rowIndex = 0; rowIndex < rows.size(); rowIndex++) {
-                Map<String, Object> rowData = rows.get(rowIndex);
-                Row excelRow = sheet.createRow(rowIndex + 1);
-                for (int colIndex = 0; colIndex < columns.size(); colIndex++) {
-                    Object value = rowData.get(columns.get(colIndex));
-                    String cellValue = value == null ? "" : String.valueOf(value);
-                    excelRow.createCell(colIndex).setCellValue(truncateCellValue(cellValue));
-                }
-            }
-
-            for (int i = 0; i < columns.size(); i++) {
-                sheet.autoSizeColumn(i);
-            }
-
-            workbook.write(outputStream);
-        }
-    }
-
     private String truncateCellValue(String value) {
         // Apache POI limit: 32767 characters per cell
         if (value == null) {
@@ -229,12 +296,18 @@ public class QueryOutputHtmlService {
         return value;
     }
 
-    private String buildHtml(String procedureName, List<Map<String, Object>> rows, String timestamp) {
+    private String buildCsvBackedHtml(String csvFilename,
+                                      List<String> header,
+                                      List<List<String>> rows,
+                                      int page,
+                                      int totalPages,
+                                      int totalRows,
+                                      int pageSize) {
         StringBuilder sb = new StringBuilder();
         sb.append("<!DOCTYPE html><html lang=\"it\"><head>")
           .append("<meta charset=\"UTF-8\">")
           .append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">")
-          .append("<title>Output: ").append(escapeHtml(procedureName)).append("</title>")
+          .append("<title>Output CSV: ").append(escapeHtml(csvFilename)).append("</title>")
           .append("<style>")
           .append(":root { --ink: #102529; --accent: #05668d; --ok: #198754; --line: #d6ccb8; }")
           .append("*{box-sizing:border-box}")
@@ -265,31 +338,54 @@ public class QueryOutputHtmlService {
           .append(".count{margin-top:0.75rem;font-size:0.9rem;color:#5b6f72}")
           .append("</style></head><body>")
           .append("<div class=\"header\">")
-          .append("<div style=\"flex:1\"><h1>").append(escapeHtml(procedureName)).append("</h1>")
-          .append("<p class=\"meta\">Generato il: ").append(escapeHtml(timestamp)).append("</p></div>")
+          .append("<div style=\"flex:1\"><h1>").append(escapeHtml(csvFilename)).append("</h1>")
+          .append("<p class=\"meta\">Vista HTML generata da CSV (pagina ")
+          .append(page)
+          .append("/")
+          .append(totalPages)
+          .append(")</p></div>")
           .append("<div class=\"toolbar\">")
           .append("<button class=\"btn btn-toggle\" onclick=\"toggleDensity()\">Vista compatta</button>")
           .append("<button class=\"btn btn-toggle\" onclick=\"toggleColumnWrap()\">Colonne strette</button>")
           .append("</div>")
           .append("</div>");
 
-        if (rows == null || rows.isEmpty()) {
+        if (header == null || header.isEmpty()) {
             sb.append("<p>Nessun risultato restituito dallo script.</p>");
         } else {
             sb.append("<div class=\"table-wrap\"><table><thead><tr>");
-            rows.get(0).keySet().forEach(col ->
-                sb.append("<th>").append(escapeHtml(String.valueOf(col))).append("</th>")
-            );
+            header.forEach(col -> sb.append("<th>").append(escapeHtml(col)).append("</th>"));
             sb.append("</tr></thead><tbody>");
-            for (Map<String, Object> row : rows) {
+            for (List<String> row : rows) {
                 sb.append("<tr>");
-                row.values().forEach(val ->
-                    sb.append("<td>").append(val == null ? "" : escapeHtml(String.valueOf(val))).append("</td>")
-                );
+                for (int i = 0; i < header.size(); i++) {
+                    String val = i < row.size() ? row.get(i) : "";
+                    sb.append("<td>").append(val == null ? "" : escapeHtml(val)).append("</td>");
+                }
                 sb.append("</tr>");
             }
             sb.append("</tbody></table></div>");
-            sb.append("<p class=\"count\">").append(rows.size()).append(" righe restituite.</p>");
+            sb.append("<p class=\"count\">Righe totali: ").append(totalRows)
+              .append(" | Pagina ").append(page).append(" di ").append(totalPages)
+              .append(" | Righe per pagina: ").append(pageSize).append("</p>");
+
+            String baseHtml = toHtmlFilename(csvFilename);
+            sb.append("<div class=\"toolbar\">");
+            if (page > 1) {
+                sb.append("<a class=\"btn btn-toggle\" style=\"text-decoration:none\" href=\"/output/")
+                  .append(escapeHtml(baseHtml))
+                  .append("?page=").append(page - 1)
+                  .append("&size=").append(pageSize)
+                  .append("\">Pagina precedente</a>");
+            }
+            if (page < totalPages) {
+                sb.append("<a class=\"btn btn-toggle\" style=\"text-decoration:none\" href=\"/output/")
+                  .append(escapeHtml(baseHtml))
+                  .append("?page=").append(page + 1)
+                  .append("&size=").append(pageSize)
+                  .append("\">Pagina successiva</a>");
+            }
+            sb.append("</div>");
         }
 
         sb.append("<script>")
@@ -316,6 +412,71 @@ public class QueryOutputHtmlService {
           .append("</body></html>");
 
         return sb.toString();
+    }
+
+    private int normalizePageSize(int pageSize) {
+        if (pageSize <= 0) {
+            return DEFAULT_PAGE_SIZE;
+        }
+        return Math.min(pageSize, MAX_PAGE_SIZE);
+    }
+
+    private List<List<String>> parseCsv(String content) {
+        List<List<String>> rows = new ArrayList<>();
+        if (content == null || content.isEmpty()) {
+            return rows;
+        }
+
+        List<String> row = new ArrayList<>();
+        StringBuilder cell = new StringBuilder();
+        boolean inQuotes = false;
+
+        for (int i = 0; i < content.length(); i++) {
+            char ch = content.charAt(i);
+
+            if (inQuotes) {
+                if (ch == '"') {
+                    if (i + 1 < content.length() && content.charAt(i + 1) == '"') {
+                        cell.append('"');
+                        i++;
+                    } else {
+                        inQuotes = false;
+                    }
+                } else {
+                    cell.append(ch);
+                }
+                continue;
+            }
+
+            if (ch == '"') {
+                inQuotes = true;
+            } else if (ch == ',') {
+                row.add(cell.toString());
+                cell.setLength(0);
+            } else if (ch == '\n') {
+                row.add(cell.toString());
+                rows.add(new ArrayList<>(row));
+                row.clear();
+                cell.setLength(0);
+            } else if (ch == '\r') {
+                // Ignore CR: gestito dal newline successivo o da solo.
+            } else {
+                cell.append(ch);
+            }
+        }
+
+        if (inQuotes) {
+            row.add(cell.toString());
+            rows.add(new ArrayList<>(row));
+            return rows;
+        }
+
+        if (cell.length() > 0 || !row.isEmpty()) {
+            row.add(cell.toString());
+            rows.add(new ArrayList<>(row));
+        }
+
+        return rows;
     }
 
     private String escapeHtml(String text) {
