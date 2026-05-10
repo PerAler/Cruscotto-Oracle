@@ -718,6 +718,14 @@
         const sql = sqlEditor.value.trim();
         if (!sql) { showMsg('Inserisci una query SQL.', false); return; }
 
+        // Verifica che la query sia eseguibile
+        const allowedKeywords = ['SELECT', 'WITH', 'INSERT', 'UPDATE'];
+        const isExecutable = allowedKeywords.some(keyword => sql.toUpperCase().startsWith(keyword));
+        if (!isExecutable) {
+            showMsg('Solo query SELECT, WITH, INSERT e UPDATE possono essere eseguite.', false);
+            return;
+        }
+
         setRunning(true);
         hideMsg();
         resultPanel.style.display = 'none';
