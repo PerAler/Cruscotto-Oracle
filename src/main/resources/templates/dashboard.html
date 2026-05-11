@@ -4,8 +4,205 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cruscotto Procedure Oracle</title>
+    <link id="appFavicon" rel="icon" type="image/svg+xml" href="/icon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css">
     <link rel="stylesheet" th:href="@{/dashboard.css(v=${#temporals.format(#temporals.createNow(), 'yyyyMMddHHmmss')})}">
+    <style>
+        @keyframes bot-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+        @keyframes arm-tap { 0%, 100% { transform: rotate(-10deg); } 50% { transform: rotate(8deg); } }
+        @keyframes blink { 0%, 44%, 100% { transform: scaleY(1); } 47%, 49% { transform: scaleY(0.12); } }
+        @keyframes calc-shift { 0% { opacity: 0; transform: translateY(8px); } 20%, 80% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-8px); } }
+        @keyframes alert-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+        @keyframes spark { 0%, 100% { opacity: 0.25; } 50% { opacity: 0.85; } }
+        @keyframes title-sheen {
+            0% { background-position: 0% 50%; text-shadow: 0 0 0 rgba(255,255,255,0.0); }
+            50% { background-position: 100% 50%; text-shadow: 0 0 18px rgba(255,255,255,0.14); }
+            100% { background-position: 0% 50%; text-shadow: 0 0 0 rgba(255,255,255,0.0); }
+        }
+        @keyframes title-float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-1px); }
+        }
+        @keyframes subtitle-breathe {
+            0%, 100% { opacity: 0.88; transform: translateY(0); }
+            50% { opacity: 1; transform: translateY(-1px); }
+        }
+        @keyframes runtime-glow {
+            0%, 100% { box-shadow: 0 0 0 rgba(103, 232, 249, 0.0); border-color: rgba(255,255,255,0.14); }
+            50% { box-shadow: 0 0 18px rgba(103, 232, 249, 0.12); border-color: rgba(255,255,255,0.26); }
+        }
+        @keyframes hero-enter {
+            0% { opacity: 0; transform: translateY(18px) scale(0.985); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes hero-enter-soft {
+            0% { opacity: 0; transform: translateY(12px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+
+        .robot-icon {
+            --robot-main: #4df6ff;
+            --robot-dark: #0891a6;
+            --robot-accent: #f59e0b;
+            --robot-alert: #ef4444;
+            --robot-offline: #64748b;
+            --robot-eye: #0f172a;
+            animation: hero-enter 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.05s both,
+                       bot-float 2.8s ease-in-out 0.8s infinite;
+            overflow: visible;
+        }
+        .robot-icon.state-ok {
+            --robot-main: #67e8f9;
+            --robot-dark: #0891b2;
+            --robot-accent: #f59e0b;
+        }
+        .robot-icon.state-script-error {
+            --robot-main: #fda4af;
+            --robot-dark: #e11d48;
+            --robot-accent: #fb7185;
+        }
+        .robot-icon.state-db-offline {
+            --robot-main: #cbd5e1;
+            --robot-dark: #475569;
+            --robot-accent: #94a3b8;
+        }
+        .robot-head,
+        .robot-body,
+        .robot-limb,
+        .robot-antenna,
+        .robot-panel {
+            fill: var(--robot-main);
+            stroke: var(--robot-dark);
+            stroke-width: 4;
+        }
+        .robot-panel,
+        .robot-antenna-tip,
+        .robot-accent {
+            fill: var(--robot-accent);
+        }
+        .robot-face,
+        .robot-display {
+            fill: #ecfeff;
+            stroke: var(--robot-dark);
+            stroke-width: 3;
+        }
+        .robot-eye {
+            fill: var(--robot-eye);
+            transform-box: fill-box;
+            transform-origin: center;
+            animation: blink 4s ease-in-out infinite;
+        }
+        .robot-arm-right {
+            transform-box: fill-box;
+            transform-origin: 20% 20%;
+            animation: arm-tap 1.2s ease-in-out infinite;
+        }
+        .calc-glyph {
+            fill: var(--robot-dark);
+            font-size: 18px;
+            font-weight: 700;
+            animation: calc-shift 2s ease-in-out infinite;
+        }
+        .calc-glyph.delay-1 { animation-delay: 0.35s; }
+        .calc-glyph.delay-2 { animation-delay: 0.7s; }
+        .spark,
+        .status-ring {
+            stroke: var(--robot-accent);
+            stroke-width: 3;
+            fill: none;
+            animation: spark 1.8s ease-in-out infinite;
+        }
+        .status-ring {
+            animation: alert-pulse 1.4s ease-in-out infinite;
+        }
+        .robot-icon.state-script-error .status-ring,
+        .robot-icon.state-script-error .spark {
+            stroke: var(--robot-alert);
+        }
+        .robot-icon.state-db-offline .status-ring,
+        .robot-icon.state-db-offline .spark {
+            stroke: var(--robot-offline);
+        }
+        .robot-icon.state-db-offline .calc-glyph,
+        .robot-icon.state-db-offline .robot-eye {
+            opacity: 0.55;
+        }
+        .robot-status-label {
+            display: inline-flex;
+            align-items: center;
+            margin-top: 0.35rem;
+            padding: 0.2rem 0.55rem;
+            border-radius: 999px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            background: rgba(255, 255, 255, 0.14);
+            color: #e6fffb;
+        }
+        .robot-status-label.state-script-error { background: rgba(225, 29, 72, 0.18); color: #ffe4e6; }
+        .robot-status-label.state-db-offline { background: rgba(71, 85, 105, 0.22); color: #e2e8f0; }
+        .hero-title {
+            margin: 0;
+            background-image: linear-gradient(90deg, #ecfeff 0%, #67e8f9 35%, #f59e0b 50%, #67e8f9 65%, #ecfeff 100%);
+            background-size: 220% 100%;
+            color: transparent;
+            -webkit-background-clip: text;
+            background-clip: text;
+            animation: hero-enter-soft 0.65s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both,
+                       title-sheen 6s ease-in-out 0.8s infinite,
+                       title-float 2.8s ease-in-out 0.8s infinite;
+            will-change: background-position, transform, text-shadow;
+        }
+        .hero-title.state-script-error {
+            background-image: linear-gradient(90deg, #ffe4e6 0%, #fb7185 40%, #e11d48 55%, #fb7185 70%, #fff1f2 100%);
+        }
+        .hero-title.state-db-offline {
+            background-image: linear-gradient(90deg, #e2e8f0 0%, #94a3b8 40%, #475569 55%, #94a3b8 70%, #f8fafc 100%);
+        }
+        .hero-subtitle {
+            margin: 0.15rem 0 0;
+            color: rgba(236, 254, 255, 0.9);
+            animation: hero-enter-soft 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.22s both,
+                       subtitle-breathe 4s ease-in-out 0.95s infinite;
+        }
+        .hero-subtitle.state-script-error {
+            color: #ffe4e6;
+        }
+        .hero-subtitle.state-db-offline {
+            color: #e2e8f0;
+        }
+        .hero-runtime {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            margin-top: 0.7rem;
+            padding: 0.45rem 0.8rem;
+            border: 1px solid rgba(255,255,255,0.14);
+            border-radius: 999px;
+            background: rgba(4, 26, 32, 0.14);
+            color: #ecfeff;
+            animation: hero-enter-soft 0.75s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both,
+                       runtime-glow 5s ease-in-out 1.05s infinite;
+            backdrop-filter: blur(4px);
+        }
+        .hero-runtime.state-script-error {
+            color: #fff1f2;
+            background: rgba(127, 29, 29, 0.14);
+            box-shadow: 0 0 18px rgba(225, 29, 72, 0.12);
+        }
+        .hero-runtime.state-db-offline {
+            color: #f8fafc;
+            background: rgba(30, 41, 59, 0.18);
+            box-shadow: 0 0 18px rgba(71, 85, 105, 0.12);
+        }
+        .hero-runtime strong {
+            color: inherit;
+        }
+        .hero-copy {
+            animation: hero-enter-soft 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+        }
+    </style>
+
 </head>
 <body>
 <div class="bg-shape shape-a"></div>
@@ -18,9 +215,47 @@
 </div>
 
 <header class="hero">
-    <h1>Cruscotto Procedure Oracle</h1>
-    <p>Esegui script SQL da file, passa parametri e pianifica job con cron.</p>
-    <p>
+    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:0.5rem">
+        <svg width="78" height="78" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"
+             style="flex-shrink:0"
+             class="robot-icon"
+             th:classappend="' state-' + ${robotState}">
+            <circle cx="100" cy="100" r="84" fill="rgba(255,255,255,0.08)"/>
+            <circle cx="100" cy="100" r="88" class="status-ring"/>
+            <line x1="100" y1="24" x2="100" y2="46" class="robot-antenna"/>
+            <circle cx="100" cy="18" r="8" class="robot-antenna-tip"/>
+            <rect x="56" y="46" width="88" height="56" rx="18" class="robot-head"/>
+            <rect x="74" y="60" width="52" height="24" rx="10" class="robot-face"/>
+            <circle cx="90" cy="72" r="6" class="robot-eye"/>
+            <circle cx="110" cy="72" r="6" class="robot-eye"/>
+            <rect x="94" y="84" width="12" height="4" rx="2" class="robot-accent"/>
+            <rect x="64" y="108" width="72" height="52" rx="16" class="robot-body"/>
+            <rect x="82" y="120" width="36" height="24" rx="6" class="robot-display"/>
+            <text x="88" y="136" class="calc-glyph">+</text>
+            <text x="100" y="136" class="calc-glyph delay-1">1</text>
+            <text x="110" y="136" class="calc-glyph delay-2">=</text>
+            <line x1="64" y1="118" x2="40" y2="136" class="robot-limb"/>
+            <line x1="136" y1="118" x2="160" y2="136" class="robot-limb robot-arm-right"/>
+            <line x1="84" y1="160" x2="74" y2="182" class="robot-limb"/>
+            <line x1="116" y1="160" x2="126" y2="182" class="robot-limb"/>
+            <rect x="144" y="128" width="26" height="32" rx="5" class="robot-panel"/>
+            <circle cx="152" cy="136" r="2.2" class="robot-accent"/>
+            <circle cx="162" cy="136" r="2.2" class="robot-accent"/>
+            <rect x="149" y="144" width="14" height="3" rx="1.5" class="robot-accent"/>
+            <path d="M38 74 Q28 86 36 98" class="spark"/>
+            <path d="M160 60 Q176 76 164 92" class="spark" style="animation-delay:0.45s"/>
+        </svg>
+                <div class="hero-copy">
+                        <h1 class="hero-title" th:classappend="' state-' + ${robotState}">Cruscotto Procedure Oracle</h1>
+            <span class="robot-status-label"
+                  th:classappend="' state-' + ${robotState}"
+                  th:text="${robotState == 'db-offline' ? 'Robot offline: DB KO' : (robotState == 'script-error' ? 'Robot in allarme: script KO' : 'Robot operativo: DB OK')}">
+                Robot operativo: DB OK
+            </span>
+        </div>
+    </div>
+    <p class="hero-subtitle" th:classappend="' state-' + ${robotState}">Esegui script SQL da file, passa parametri e pianifica job con cron.</p>
+    <p class="hero-runtime" th:classappend="' state-' + ${robotState}">
         Istanza PID <strong th:text="${runtimePid}"></strong>
         avviata alle
         <strong th:text="${#temporals.format(runtimeStartedAt, 'dd/MM/yyyy HH:mm:ss')}"></strong>
@@ -236,6 +471,61 @@
 
 
 </main>
+
+<script th:inline="javascript">
+    (function () {
+        var state = /*[[${robotState}]]*/ "ok";
+        var favicon = document.getElementById("appFavicon");
+        if (!favicon) {
+            return;
+        }
+
+        var paletteByState = {
+            "ok": {
+                main: "#67e8f9",
+                dark: "#0891b2",
+                accent: "#f59e0b",
+                halo: "#0f766e"
+            },
+            "script-error": {
+                main: "#fda4af",
+                dark: "#e11d48",
+                accent: "#fb7185",
+                halo: "#7f1d1d"
+            },
+            "db-offline": {
+                main: "#cbd5e1",
+                dark: "#475569",
+                accent: "#94a3b8",
+                halo: "#1e293b"
+            }
+        };
+
+        var palette = paletteByState[state] || paletteByState.ok;
+        var svg = ""
+            + "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>"
+            + "<circle cx='32' cy='32' r='28' fill='" + palette.halo + "' opacity='0.18'/>"
+            + "<circle cx='32' cy='32' r='30' fill='none' stroke='" + palette.accent + "' stroke-width='2.2'/>"
+            + "<line x1='32' y1='8' x2='32' y2='15' stroke='" + palette.dark + "' stroke-width='2.5' stroke-linecap='round'/>"
+            + "<circle cx='32' cy='6' r='3' fill='" + palette.accent + "'/>"
+            + "<rect x='18' y='15' width='28' height='18' rx='6' fill='" + palette.main + "' stroke='" + palette.dark + "' stroke-width='2.5'/>"
+            + "<rect x='24' y='20' width='16' height='8' rx='3' fill='#ecfeff' stroke='" + palette.dark + "' stroke-width='1.8'/>"
+            + "<circle cx='29' cy='24' r='1.9' fill='#0f172a'/>"
+            + "<circle cx='35' cy='24' r='1.9' fill='#0f172a'/>"
+            + "<rect x='30' y='28.5' width='4' height='1.8' rx='0.9' fill='" + palette.accent + "'/>"
+            + "<rect x='21' y='35' width='22' height='16' rx='5' fill='" + palette.main + "' stroke='" + palette.dark + "' stroke-width='2.5'/>"
+            + "<rect x='26.5' y='39' width='11' height='7' rx='2' fill='#ecfeff' stroke='" + palette.dark + "' stroke-width='1.5'/>"
+            + "<text x='28' y='44.3' font-size='5.5' font-weight='700' font-family='Arial, sans-serif' fill='" + palette.dark + "'>+1=</text>"
+            + "<line x1='21' y1='38' x2='12' y2='45' stroke='" + palette.dark + "' stroke-width='2.5' stroke-linecap='round'/>"
+            + "<line x1='43' y1='38' x2='52' y2='45' stroke='" + palette.dark + "' stroke-width='2.5' stroke-linecap='round'/>"
+            + "<line x1='27' y1='51' x2='23' y2='58' stroke='" + palette.dark + "' stroke-width='2.5' stroke-linecap='round'/>"
+            + "<line x1='37' y1='51' x2='41' y2='58' stroke='" + palette.dark + "' stroke-width='2.5' stroke-linecap='round'/>"
+            + "<rect x='46' y='41' width='9' height='10' rx='2' fill='" + palette.accent + "' stroke='" + palette.dark + "' stroke-width='1.8'/>"
+            + "</svg>";
+
+        favicon.href = "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg);
+    })();
+</script>
 
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-sql.min.js"></script>

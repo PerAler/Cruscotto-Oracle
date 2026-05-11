@@ -17,9 +17,9 @@ body {
     margin: 0;
     font-family: "Trebuchet MS", "Segoe UI", sans-serif;
     color: var(--ink);
-    background: radial-gradient(circle at 15% 20%, #ffe8d6, transparent 35%),
-                radial-gradient(circle at 85% 25%, #d8f3dc, transparent 30%),
-                linear-gradient(145deg, #f3efe5, #e7f0f4);
+    background: radial-gradient(circle at 15% 20%, #f1d7bf, transparent 35%),
+                radial-gradient(circle at 85% 25%, #bedfcb, transparent 30%),
+                linear-gradient(145deg, #e7dfcf, #dbe8ee);
     min-height: 100vh;
 }
 
@@ -98,15 +98,38 @@ body.is-busy .busy-overlay {
 }
 
 .hero {
+    position: relative;
+    isolation: isolate;
     padding: 2.5rem 1rem 1rem;
     text-align: center;
+    margin: 0.8rem auto 0.5rem;
+    width: min(1180px, 95vw);
+    border-radius: 18px;
+    background: linear-gradient(135deg, rgba(7, 36, 45, 0.9), rgba(9, 54, 67, 0.84));
+    border: 1px solid rgba(177, 230, 243, 0.18);
+    box-shadow: 0 14px 34px rgba(5, 28, 36, 0.35);
     animation: fadeIn 500ms ease-out;
+}
+
+.hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(circle at 14% 20%, rgba(103, 232, 249, 0.16), transparent 40%),
+                radial-gradient(circle at 84% 18%, rgba(245, 158, 11, 0.2), transparent 35%);
+    z-index: -1;
 }
 
 .hero h1 {
     margin: 0;
     font-family: Georgia, "Times New Roman", serif;
     letter-spacing: 0.5px;
+}
+
+.hero p {
+    color: #e6fbff;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.25);
 }
 
 .layout {

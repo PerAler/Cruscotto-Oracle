@@ -1,0 +1,105 @@
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    @keyframes bot-float {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-3px); }
+    }
+    @keyframes arm-tap {
+      0%, 100% { transform: rotate(-10deg); }
+      50% { transform: rotate(8deg); }
+    }
+    @keyframes blink {
+      0%, 44%, 100% { transform: scaleY(1); }
+      47%, 49% { transform: scaleY(0.12); }
+    }
+    @keyframes calc-shift {
+      0% { opacity: 0; transform: translateY(8px); }
+      20%, 80% { opacity: 1; transform: translateY(0); }
+      100% { opacity: 0; transform: translateY(-8px); }
+    }
+    @keyframes pulse-ring {
+      0%, 100% { opacity: 0.35; }
+      50% { opacity: 0.95; }
+    }
+
+    .robot-icon {
+      --robot-main: #4df6ff;
+      --robot-dark: #0891a6;
+      --robot-accent: #f59e0b;
+      animation: bot-float 2.8s ease-in-out infinite;
+      transform-origin: center;
+    }
+    .robot-head,
+    .robot-body,
+    .robot-limb,
+    .robot-antenna,
+    .robot-panel {
+      fill: var(--robot-main);
+      stroke: var(--robot-dark);
+      stroke-width: 4;
+    }
+    .robot-accent,
+    .robot-antenna-tip,
+    .robot-panel-key {
+      fill: var(--robot-accent);
+    }
+    .robot-face,
+    .robot-display {
+      fill: #ecfeff;
+      stroke: var(--robot-dark);
+      stroke-width: 3;
+    }
+    .robot-eye {
+      fill: #0f172a;
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: blink 4s ease-in-out infinite;
+    }
+    .robot-arm-right {
+      transform-box: fill-box;
+      transform-origin: 20% 20%;
+      animation: arm-tap 1.2s ease-in-out infinite;
+    }
+    .calc-glyph {
+      fill: var(--robot-dark);
+      font: 700 18px Arial, sans-serif;
+      animation: calc-shift 2s ease-in-out infinite;
+    }
+    .calc-glyph.delay-1 { animation-delay: 0.35s; }
+    .calc-glyph.delay-2 { animation-delay: 0.7s; }
+    .status-ring,
+    .spark {
+      stroke: var(--robot-accent);
+      stroke-width: 3;
+      fill: none;
+      animation: pulse-ring 1.8s ease-in-out infinite;
+    }
+  </style>
+
+  <g class="robot-icon">
+    <circle cx="100" cy="100" r="84" fill="#083344" opacity="0.18"/>
+    <circle cx="100" cy="100" r="88" class="status-ring"/>
+    <line x1="100" y1="24" x2="100" y2="46" class="robot-antenna"/>
+    <circle cx="100" cy="18" r="8" class="robot-antenna-tip"/>
+    <rect x="56" y="46" width="88" height="56" rx="18" class="robot-head"/>
+    <rect x="74" y="60" width="52" height="24" rx="10" class="robot-face"/>
+    <circle cx="90" cy="72" r="6" class="robot-eye"/>
+    <circle cx="110" cy="72" r="6" class="robot-eye"/>
+    <rect x="94" y="84" width="12" height="4" rx="2" class="robot-accent"/>
+    <rect x="64" y="108" width="72" height="52" rx="16" class="robot-body"/>
+    <rect x="82" y="120" width="36" height="24" rx="6" class="robot-display"/>
+    <text x="88" y="136" class="calc-glyph">+</text>
+    <text x="100" y="136" class="calc-glyph delay-1">1</text>
+    <text x="110" y="136" class="calc-glyph delay-2">=</text>
+    <line x1="64" y1="118" x2="40" y2="136" class="robot-limb"/>
+    <line x1="136" y1="118" x2="160" y2="136" class="robot-limb robot-arm-right"/>
+    <line x1="84" y1="160" x2="74" y2="182" class="robot-limb"/>
+    <line x1="116" y1="160" x2="126" y2="182" class="robot-limb"/>
+    <rect x="144" y="128" width="26" height="32" rx="5" class="robot-panel"/>
+    <circle cx="152" cy="136" r="2.2" class="robot-panel-key"/>
+    <circle cx="162" cy="136" r="2.2" class="robot-panel-key"/>
+    <rect x="149" y="144" width="14" height="3" rx="1.5" class="robot-panel-key"/>
+    <path d="M38 74 Q28 86 36 98" class="spark"/>
+    <path d="M160 60 Q176 76 164 92" class="spark" style="animation-delay:0.45s"/>
+  </g>
+</svg>

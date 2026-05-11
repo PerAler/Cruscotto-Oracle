@@ -6,6 +6,7 @@ import com.example.cruscotto.service.QueryOutputHtmlService;
 import com.example.cruscotto.service.ScheduledExecutionService;
 import com.example.cruscotto.service.SqlProcedureCatalogService;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ContentDisposition;
@@ -50,6 +51,7 @@ public class DashboardController {
     private final ScheduledExecutionService scheduledExecutionService;
     private final ExecutionLogService executionLogService;
     private final QueryOutputHtmlService queryOutputHtmlService;
+    private final NamedParameterJdbcTemplate namedParameterJdbcTemplate;
     private final List<String> applications;
     private final String defaultApplication;
     private final String runtimePid;
@@ -60,6 +62,7 @@ public class DashboardController {
                                ScheduledExecutionService scheduledExecutionService,
                                ExecutionLogService executionLogService,
                                QueryOutputHtmlService queryOutputHtmlService,
+                               NamedParameterJdbcTemplate namedParameterJdbcTemplate,
                                @Value("${app.target-applications:ALER}") String configuredApplications,
                                @Value("${app.default-application:ALER}") String defaultApplication) {
         this.catalogService = catalogService;
@@ -67,6 +70,7 @@ public class DashboardController {
         this.scheduledExecutionService = scheduledExecutionService;
         this.executionLogService = executionLogService;
         this.queryOutputHtmlService = queryOutputHtmlService;
+        this.namedParameterJdbcTemplate = namedParameterJdbcTemplate;
         this.applications = Arrays.stream(configuredApplications.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isBlank())
@@ -92,16 +96,20 @@ public class DashboardController {
                     .toList();
         }
 
+        boolean dbConnected = isDatabaseConnected();
+        List<com.example.cruscotto.model.ExecutionLogEntry> latestLogs = executionLogService.latest();
+        String robotState = resolveRobotState(dbConnected, errorMessage, latestLogs);
+
         // Conta errori totali
-        long errorCount = executionLogService.latest()
+        long errorCount = latestLogs
                 .stream()
                 .filter(e -> "KO".equals(e.status()))
                 .count();
-        long okCount = executionLogService.latest()
+        long okCount = latestLogs
             .stream()
             .filter(e -> "OK".equals(e.status()))
             .count();
-        long outputCount = executionLogService.latest()
+        long outputCount = latestLogs
             .stream()
             .filter(e -> e.outputHtmlFile() != null)
             .count();
@@ -109,13 +117,15 @@ public class DashboardController {
         model.addAttribute("allProcedures", allProcedures);
         model.addAttribute("selectedProcedure", effectiveSelection);
         model.addAttribute("procedures", visibleProcedures);
-        model.addAttribute("logs", executionLogService.latest());
+        model.addAttribute("logs", latestLogs);
         model.addAttribute("successMessage", successMessage);
         model.addAttribute("errorMessage", errorMessage);
         model.addAttribute("outputFile", outputFile);
         model.addAttribute("errorCount", errorCount);
         model.addAttribute("okCount", okCount);
         model.addAttribute("outputCount", outputCount);
+        model.addAttribute("dbConnected", dbConnected);
+        model.addAttribute("robotState", robotState);
         model.addAttribute("jobs", scheduledExecutionService.listJobs());
         model.addAttribute("applications", applications);
         model.addAttribute("defaultApplication", defaultApplication);
@@ -171,6 +181,31 @@ public class DashboardController {
     @GetMapping("/errors/delete-all")
     public String rejectGetDeleteAllErrors() {
         return redirectToErrors(null, "Eliminazione totale errori disponibile solo via POST.");
+    }
+
+    private boolean isDatabaseConnected() {
+        try {
+            Integer probe = namedParameterJdbcTemplate.getJdbcTemplate().queryForObject("SELECT 1 FROM DUAL", Integer.class);
+            return probe != null && probe == 1;
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
+    private String resolveRobotState(boolean dbConnected,
+                                     String errorMessage,
+                                     List<com.example.cruscotto.model.ExecutionLogEntry> latestLogs) {
+        if (!dbConnected) {
+            return "db-offline";
+        }
+        if (errorMessage != null && !errorMessage.isBlank()) {
+            return "script-error";
+        }
+        boolean latestExecutionFailed = !latestLogs.isEmpty() && "KO".equals(latestLogs.get(0).status());
+        if (latestExecutionFailed) {
+            return "script-error";
+        }
+        return "ok";
     }
 
     @GetMapping("/logs")
