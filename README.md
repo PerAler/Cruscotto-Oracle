@@ -1,53 +1,115 @@
-# Cruscotto Oracle - Spring Boot
+# Cruscotto Oracle — Spring Boot
 
-Cruscotto web per:
-- caricare procedure/script Oracle da file `.sql`
-- eseguire manualmente con parametri
-- pianificare esecuzioni tramite espressioni cron
-- visualizzare log di esecuzione in memoria (non storico su DB)
+Applicazione web Spring Boot 3 per la gestione, esecuzione e monitoraggio di script SQL/PL-SQL su database Oracle.
+
+---
+
+## Funzionalità
+
+### Dashboard principale (`/dashboard`)
+- **Catalogo script SQL** — carica automaticamente tutti i file `.sql` presenti in `src/main/resources/sql`; filtro per nome in tempo reale.
+- **Editor SQL rapido** — textarea con:
+  - Syntax highlighting PL/SQL via Prism.js
+  - Autocompletamento keyword SQL (Tab / frecce)
+  - **Formattatore PL/SQL** — uppercase keyword, interruzioni di riga strutturali, indentazione automatica BEGIN/END/IF/LOOP, protezione stringhe e commenti
+  - Persistenza bozza in `localStorage`
+  - Estrazione automatica parametri bind (`:param`)
+- **Esecuzione query** — esegue script SQL con parametri bind; supporta SELECT, WITH, INSERT, UPDATE
+- **Salvataggio script** — salva nuovi file `.sql` nel catalogo oppure aggiorna script esistenti
+- **Parametri bind** — inserimento nome=valore, uno per riga
+- **Robot animato** nell'header con stato dinamico: `ok` / `script-error` / `db-offline`
+- **KPI dashboard** — card cliccabili: Log totali, Esecuzioni OK, Errori attivi, Output generati
+- **Schedulazioni cron** — pianificazione esecuzioni con espressione Spring cron a 6 campi; lancio singolo one-shot con data/ora locale
+
+### Editor SQL dedicato (`/editor`)
+- **Editor full-page** con numerazione righe sincronizzata
+- **Formattatore PL/SQL** — identico alla dashboard (pulsante nell'action bar)
+- **Robot animato** nell'header con stato dinamico (stesso robot della dashboard)
+- Autocompletamento keyword SQL (Tab / frecce / Escape)
+- Selezione script dal catalogo (caricamento AJAX, senza reload pagina)
+- Ricarica catalogo da disco senza riavvio
+- **Esegui** — AJAX con spinner, risultati visualizzati in iframe inline
+- **Vista risultati** con toggle densità (compatta / estesa) e toggle larghezza colonne
+- **Salva nuovo** / **Aggiorna script selezionato** (POST form)
+- Estrazione automatica parametri bind
+
+### Output (`/output/*`)
+- Export **HTML**, **CSV**, **XLSX** per ogni esecuzione con output
+- Limite cella XLSX: 32.767 caratteri (troncatura automatica)
+- Salvataggio condizionale HTML: se HTML > 32.767 caratteri vengono generati solo CSV/XLSX
+- Retention: massimo 100 bundle output (`app.output.max-items`)
+
+### Log e monitoraggio
+- **Log esecuzioni** (`/logs`) — tabella con filtro per stato (OK/KO), link ai file output (HTML/CSV/XLSX)
+- **Log errori** (`/errors`) — vista dedicata ai soli KO
+- **Persistenza log su Oracle** — tabella `CRUSCOTTO_EXEC_LOG`; ricaricamento all'avvio (`app.logs.persist.enabled=true`)
+- Retention log configurabile (`app.logs.max-size`)
+
+### API / Endpoint utili
+| Endpoint | Metodo | Descrizione |
+|---|---|---|
+| `/dashboard` | GET | Pagina principale |
+| `/editor` | GET | Editor SQL dedicato |
+| `/query/execute` | POST | Esegui script dal cruscotto |
+| `/query/save` | POST | Salva nuovo script |
+| `/query/update` | POST | Aggiorna script esistente |
+| `/editor/execute` | POST | Esegui query (AJAX, ritorna JSON) |
+| `/editor/save` | POST | Salva script dall'editor |
+| `/editor/update` | POST | Aggiorna script dall'editor |
+| `/editor/load-script` | GET | Carica script (AJAX, ritorna JSON) |
+| `/catalog/reload` | POST | Ricarica catalogo da disco |
+| `/output/{filename}` | GET | Visualizza/scarica file output |
+| `/logs` | GET | Pagina log esecuzioni |
+| `/errors` | GET | Pagina log errori |
+
+---
 
 ## Requisiti
 - JDK 21
 - Maven 3.9+
-- Accesso a database Oracle
+- Oracle Database (JDBC thin)
 
-## Configurazione DB
-Aggiorna `src/main/resources/application.properties`:
-- `spring.datasource.url`
-- `spring.datasource.username`
-- `spring.datasource.password`
+## Configurazione
 
-Esempio URL Oracle:
-`jdbc:oracle:thin:@//HOST:1521/SERVICE_NAME`
+`src/main/resources/application.properties`:
 
-## SQL delle procedure
-Inserisci i file SQL in `src/main/resources/sql`.
+```properties
+server.port=8090
+spring.datasource.url=jdbc:oracle:thin:@//HOST:1521/SERVICE_NAME
+spring.datasource.username=utente
+spring.datasource.password=password
 
-Per passare parametri, usa placeholder bind nel file SQL, ad esempio:
-`TO_DATE(:data_fattura, 'DD-MON-YYYY')`
+app.output.folder=output
+app.output.max-items=100
+app.logs.max-size=500
+app.logs.persist.enabled=true
+```
 
-Nel cruscotto il parametro verra mostrato automaticamente e inviato come stringa.
+## Script SQL
+Inserisci i file `.sql` in `src/main/resources/sql`.  
+Per i parametri bind usa placeholder `:nomeparametro`, ad esempio:
+```sql
+SELECT * FROM fatture WHERE anno = :anno AND stato = :stato
+```
 
 ## Avvio
 ```bash
-mvn spring-boot:run
+cd C:\Temp\Cruscotto_Oracle
+mvn clean package -DskipTests
+java -jar target\cruscotto-oracle-0.0.1-SNAPSHOT.war
 ```
 Apri `http://localhost:8090`.
 
-## Uso scheduler
-Nel riquadro di ogni procedura inserisci un cron Spring a 6 campi, ad esempio:
-- Ogni 30 minuti: `0 0/30 * * * *`
-- Ogni giorno alle 02:15: `0 15 2 * * *`
+## Scheduler cron (6 campi Spring)
+| Esempio | Significato |
+|---|---|
+| `0 0/30 * * * *` | Ogni 30 minuti |
+| `0 15 2 * * *` | Ogni giorno alle 02:15 |
+| `0 0 8 * * MON-FRI` | Giorni feriali alle 08:00 |
 
-Per un lancio singolo usa il form "Lancio singolo (data e ora locale)".
-La schedulazione one-shot viene rimossa automaticamente dopo l'esecuzione.
+Le schedulazioni sono in memoria e vengono azzerate al riavvio.
 
 ## Note tecniche
-- I log sono in memoria (buffer FIFO con dimensione configurabile da `app.logs.max-size`).
-- Le schedulazioni sono in memoria e vengono azzerate al riavvio.
-- Se vuoi uno storico persistente, posso aggiungere tabella Oracle + repository per salvataggio log.
-
-
-taskkill /F /IM java.exe /T 2>&1 | Out-String
-taskkill /F /IM mvn.bat /T 2>&1 | Out-String
-Write-Host "Process cleanup complete"
+- Log in memoria (buffer FIFO); con `app.logs.persist.enabled=true` vengono persistiti su Oracle e ricaricati all'avvio.
+- Schedulazioni in memoria: azzerate al riavvio.
+- Il WAR è deployabile su Tomcat esterno oppure avviabile come fat-JAR.
