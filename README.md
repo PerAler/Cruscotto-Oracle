@@ -34,10 +34,11 @@ Applicazione web Spring Boot 3 per la gestione, esecuzione e monitoraggio di scr
 - Estrazione automatica parametri bind
 
 ### Output (`/output/*`)
-- Export **HTML**, **CSV**, **XLSX** per ogni esecuzione con output
-- Limite cella XLSX: 32.767 caratteri (troncatura automatica)
-- Salvataggio condizionale HTML: se HTML > 32.767 caratteri vengono generati solo CSV/XLSX
-- Retention: massimo 100 bundle output (`app.output.max-items`)
+- Ogni esecuzione con risultati salva **un solo file CSV** nella cartella `output/`
+- **HTML** — generato on-demand dal CSV al momento della visualizzazione; paginato (200 righe per pagina, max 1000)
+- **XLSX** — generato on-demand dal CSV al momento del download; colonne auto-dimensionate, troncatura celle a 32.767 caratteri
+- I link HTML/CSV/XLSX nella dashboard puntano tutti allo stesso bundle base (stesso timestamp); solo il CSV è persistito su disco
+- Retention: massimo 100 bundle CSV (`app.output.max-items`); i file più vecchi vengono rimossi automaticamente ad ogni nuova esecuzione
 
 ### Log e monitoraggio
 - **Log esecuzioni** (`/logs`) — tabella con filtro per stato (OK/KO), link ai file output (HTML/CSV/XLSX)
