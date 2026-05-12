@@ -417,6 +417,7 @@
 
         <div class="editor-actions" style="margin-top:0.65rem">
             <button type="button" id="loadSelectedScript" class="secondary">Carica SQL Selezionato</button>
+            <button type="button" id="formatSqlBtn" class="secondary" title="Formatta il testo SQL/PL-SQL con indentazione e keyword uppercase">Formatta SQL/PL-SQL</button>
 
             <form method="post" action="/query/execute" style="display:inline">
                 <input type="hidden" name="sqlText" id="executeSqlText">
@@ -1135,8 +1136,137 @@
             });
         }
 
-        if (loadSelectedScript && selectedScriptSql && sqlText) {
-            loadSelectedScript.addEventListener("click", function () {
+        // ---- PL/SQL Formatter ----
+        function formatPlSql(rawSql) {
+            if (!rawSql || !rawSql.trim()) return rawSql;
+
+            // Protect string literals and comments from modification
+            var saved = [];
+            var cnt = 0;
+            function protect(m) {
+                var k = '\x00' + (cnt++) + '\x00';
+                saved.push(m);
+                return k;
+            }
+
+            var s = rawSql
+                .replace(/\/\*[\s\S]*?\*\//g, protect)
+                .replace(/--[^\n]*/g, protect)
+                .replace(/'(?:[^']|'')*'/g, protect);
+
+            // Normalize whitespace
+            s = s.replace(/\r?\n/g, ' ').replace(/\t/g, ' ').replace(/ +/g, ' ').trim();
+
+            // Uppercase keywords (longer phrases first to avoid partial matches)
+            var KEYWORDS = [
+                'SELECT DISTINCT','SELECT ALL','SELECT',
+                'GROUP BY','ORDER BY','PARTITION BY','CONNECT BY','START WITH',
+                'UNION ALL','UNION','INTERSECT','MINUS','EXCEPT',
+                'INNER JOIN','LEFT OUTER JOIN','RIGHT OUTER JOIN','FULL OUTER JOIN',
+                'LEFT JOIN','RIGHT JOIN','FULL JOIN','CROSS JOIN','NATURAL JOIN',
+                'INSERT INTO','DELETE FROM','MERGE INTO',
+                'CREATE OR REPLACE PROCEDURE','CREATE OR REPLACE FUNCTION',
+                'CREATE OR REPLACE PACKAGE BODY','CREATE OR REPLACE PACKAGE',
+                'CREATE OR REPLACE TRIGGER','CREATE OR REPLACE VIEW',
+                'CREATE TABLE','CREATE INDEX','CREATE VIEW','CREATE',
+                'ALTER TABLE','ALTER','DROP TABLE','DROP',
+                'IS NOT NULL','IS NULL','NOT IN','NOT EXISTS','NOT LIKE','NOT BETWEEN',
+                'END IF','END LOOP','END CASE',
+                'ROWS BETWEEN','RANGE BETWEEN','FETCH FIRST','FETCH NEXT','ROWS ONLY',
+                'FROM','WHERE','HAVING','SET','INTO','VALUES',
+                'ON','AS','IS','IN','EXISTS','LIKE','BETWEEN',
+                'AND','OR','NOT',
+                'NULL','TRUE','FALSE',
+                'DECLARE','BEGIN','END','EXCEPTION','RETURN','RAISE',
+                'IF','ELSIF','ELSEIF','ELSE','THEN',
+                'CASE','WHEN',
+                'FOR','WHILE','LOOP','EXIT WHEN','EXIT',
+                'CURSOR','OPEN','FETCH','CLOSE',
+                'PROCEDURE','FUNCTION','PACKAGE BODY','PACKAGE','TRIGGER',
+                'UPDATE','DELETE','INSERT',
+                'COMMIT','ROLLBACK','SAVEPOINT',
+                'WITH','OVER','DISTINCT','ALL',
+                'PRIOR','LEVEL','ROWNUM','ROWID'
+            ];
+
+            KEYWORDS.forEach(function(k) {
+                s = s.replace(
+                    new RegExp('\\b' + k.replace(/ /g, '\\s+') + '\\b', 'gi'),
+                    k
+                );
+            });
+
+            // Add newline before structural keywords
+            var NEWLINE_BEFORE = [
+                'SELECT DISTINCT','SELECT ALL','SELECT',
+                'GROUP BY','ORDER BY',
+                'UNION ALL','UNION','INTERSECT','MINUS','EXCEPT',
+                'INNER JOIN','LEFT OUTER JOIN','RIGHT OUTER JOIN','FULL OUTER JOIN',
+                'LEFT JOIN','RIGHT JOIN','FULL JOIN','CROSS JOIN','NATURAL JOIN',
+                'FROM','WHERE','HAVING','SET','VALUES',
+                'DECLARE','BEGIN','EXCEPTION',
+                'END IF','END LOOP','END CASE','END',
+                'ELSIF','ELSE',
+                'COMMIT','ROLLBACK',
+                'WITH'
+            ];
+
+            NEWLINE_BEFORE.forEach(function(k) {
+                s = s.replace(
+                    new RegExp(' (' + k.replace(/ /g, '\\s+') + ')(?=[ (\\n]|$)', 'g'),
+                    '\n$1'
+                );
+            });
+
+            // AND/OR conditions on new indented lines
+            s = s.replace(/ (AND|OR) /g, '\n    $1 ');
+
+            // Newline after semicolon
+            s = s.replace(/;(?!\x00)/g, ';\n');
+
+            // Indentation pass
+            var lines = s.split('\n');
+            var depth = 0;
+            var IND = '    ';
+            var result = [];
+
+            var DEC_BEFORE = /^(END\b|ELSIF\b|ELSE\b|EXCEPTION\b)/i;
+            var INC_AFTER  = /^(BEGIN\b|DECLARE\b|THEN\b|ELSE\b|LOOP\b)/i;
+
+            lines.forEach(function(line) {
+                var t = line.trim();
+                if (!t) return;
+                if (DEC_BEFORE.test(t)) {
+                    depth = Math.max(0, depth - 1);
+                }
+                result.push(IND.repeat(depth) + t);
+                if (INC_AFTER.test(t)) {
+                    depth++;
+                }
+            });
+
+            s = result.join('\n');
+
+            // Restore protected fragments
+            s = s.replace(/\x00(\d+)\x00/g, function(_, i) { return saved[parseInt(i, 10)]; });
+
+            return s;
+        }
+
+        var formatSqlBtn = document.getElementById("formatSqlBtn");
+        if (formatSqlBtn && sqlText) {
+            formatSqlBtn.addEventListener("click", function() {
+                var formatted = formatPlSql(sqlText.value);
+                if (formatted !== null && formatted !== undefined) {
+                    sqlText.value = formatted;
+                    localStorage.setItem(SQL_EDITOR_KEY, sqlText.value);
+                    renderPreview();
+                    sqlText.focus();
+                }
+            });
+        }
+
+        if (loadSelectedScript && selectedScriptSql && sqlText) {            loadSelectedScript.addEventListener("click", function () {
                 var content = selectedScriptSql.value || "";
                 if (!content.trim()) {
                     return;

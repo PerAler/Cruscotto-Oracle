@@ -277,6 +277,71 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+
+        /* ── Robot animato ───────────────────────────────────────────────── */
+        @keyframes bot-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+        @keyframes arm-tap { 0%, 100% { transform: rotate(-10deg); } 50% { transform: rotate(8deg); } }
+        @keyframes blink { 0%, 44%, 100% { transform: scaleY(1); } 47%, 49% { transform: scaleY(0.12); } }
+        @keyframes calc-shift { 0% { opacity: 0; transform: translateY(8px); } 20%, 80% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-8px); } }
+        @keyframes alert-pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+        @keyframes spark-anim { 0%, 100% { opacity: 0.25; } 50% { opacity: 0.85; } }
+        @keyframes title-sheen {
+            0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; }
+        }
+        @keyframes hero-enter-soft {
+            0% { opacity: 0; transform: translateY(12px); } 100% { opacity: 1; transform: translateY(0); }
+        }
+
+        .robot-icon {
+            --robot-main: #4df6ff;
+            --robot-dark: #0891a6;
+            --robot-accent: #f59e0b;
+            --robot-alert: #ef4444;
+            --robot-offline: #64748b;
+            --robot-eye: #0f172a;
+            animation: hero-enter-soft 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.05s both,
+                       bot-float 2.8s ease-in-out 0.8s infinite;
+            overflow: visible;
+        }
+        .robot-icon.state-ok    { --robot-main: #67e8f9; --robot-dark: #0891b2; }
+        .robot-icon.state-script-error { --robot-main: #fda4af; --robot-dark: #e11d48; --robot-accent: #fb7185; }
+        .robot-icon.state-db-offline   { --robot-main: #cbd5e1; --robot-dark: #475569; --robot-accent: #94a3b8; }
+        .robot-head, .robot-body, .robot-limb, .robot-antenna, .robot-panel {
+            fill: var(--robot-main); stroke: var(--robot-dark); stroke-width: 4;
+        }
+        .robot-panel, .robot-antenna-tip, .robot-accent { fill: var(--robot-accent); }
+        .robot-face, .robot-display { fill: #ecfeff; stroke: var(--robot-dark); stroke-width: 3; }
+        .robot-eye {
+            fill: var(--robot-eye);
+            transform-box: fill-box; transform-origin: center;
+            animation: blink 4s ease-in-out infinite;
+        }
+        .robot-arm-right {
+            transform-box: fill-box; transform-origin: 20% 20%;
+            animation: arm-tap 1.2s ease-in-out infinite;
+        }
+        .calc-glyph { fill: var(--robot-dark); font-size: 18px; font-weight: 700; animation: calc-shift 2s ease-in-out infinite; }
+        .calc-glyph.delay-1 { animation-delay: 0.35s; }
+        .calc-glyph.delay-2 { animation-delay: 0.7s; }
+        .spark, .status-ring {
+            stroke: var(--robot-accent); stroke-width: 3; fill: none;
+            animation: spark-anim 1.8s ease-in-out infinite;
+        }
+        .status-ring { animation: alert-pulse 1.4s ease-in-out infinite; }
+        .robot-icon.state-script-error .status-ring,
+        .robot-icon.state-script-error .spark { stroke: var(--robot-alert); }
+        .robot-icon.state-db-offline .status-ring,
+        .robot-icon.state-db-offline .spark { stroke: var(--robot-offline); }
+        .robot-icon.state-db-offline .calc-glyph,
+        .robot-icon.state-db-offline .robot-eye { opacity: 0.55; }
+        .robot-status-label {
+            display: inline-flex; align-items: center;
+            margin-top: 0.35rem; padding: 0.2rem 0.55rem;
+            border-radius: 999px; font-size: 0.78rem; font-weight: 700;
+            background: rgba(255,255,255,0.14); color: #e6fffb;
+        }
+        .robot-status-label.state-script-error { background: rgba(225,29,72,0.18); color: #ffe4e6; }
+        .robot-status-label.state-db-offline   { background: rgba(71,85,105,0.22); color: #e2e8f0; }
     </style>
 </head>
 <body>
@@ -284,8 +349,46 @@
 <div class="bg-shape shape-b"></div>
 
 <header class="hero">
-    <h1>Editor SQL</h1>
-    <p>Componi, esegui e salva query SELECT direttamente su Oracle.</p>
+    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:0.5rem">
+        <svg width="64" height="64" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"
+             style="flex-shrink:0"
+             class="robot-icon"
+             th:classappend="' state-' + ${robotState}">
+            <circle cx="100" cy="100" r="84" fill="rgba(255,255,255,0.08)"/>
+            <circle cx="100" cy="100" r="88" class="status-ring"/>
+            <line x1="100" y1="24" x2="100" y2="46" class="robot-antenna"/>
+            <circle cx="100" cy="18" r="8" class="robot-antenna-tip"/>
+            <rect x="56" y="46" width="88" height="56" rx="18" class="robot-head"/>
+            <rect x="74" y="60" width="52" height="24" rx="10" class="robot-face"/>
+            <circle cx="90" cy="72" r="6" class="robot-eye"/>
+            <circle cx="110" cy="72" r="6" class="robot-eye"/>
+            <rect x="94" y="84" width="12" height="4" rx="2" class="robot-accent"/>
+            <rect x="64" y="108" width="72" height="52" rx="16" class="robot-body"/>
+            <rect x="82" y="120" width="36" height="24" rx="6" class="robot-display"/>
+            <text x="88" y="136" class="calc-glyph">+</text>
+            <text x="100" y="136" class="calc-glyph delay-1">1</text>
+            <text x="110" y="136" class="calc-glyph delay-2">=</text>
+            <line x1="64" y1="118" x2="40" y2="136" class="robot-limb"/>
+            <line x1="136" y1="118" x2="160" y2="136" class="robot-limb robot-arm-right"/>
+            <line x1="84" y1="160" x2="74" y2="182" class="robot-limb"/>
+            <line x1="116" y1="160" x2="126" y2="182" class="robot-limb"/>
+            <rect x="144" y="128" width="26" height="32" rx="5" class="robot-panel"/>
+            <circle cx="152" cy="136" r="2.2" class="robot-accent"/>
+            <circle cx="162" cy="136" r="2.2" class="robot-accent"/>
+            <rect x="149" y="144" width="14" height="3" rx="1.5" class="robot-accent"/>
+            <path d="M38 74 Q28 86 36 98" class="spark"/>
+            <path d="M160 60 Q176 76 164 92" class="spark" style="animation-delay:0.45s"/>
+        </svg>
+        <div style="animation: hero-enter-soft 0.6s cubic-bezier(0.22,1,0.36,1) 0.1s both">
+            <h1 style="margin:0">Editor SQL</h1>
+            <span class="robot-status-label"
+                  th:classappend="' state-' + ${robotState}"
+                  th:text="${robotState == 'db-offline' ? 'Robot offline: DB KO' : (robotState == 'script-error' ? 'Robot in allarme: script KO' : 'Robot operativo: DB OK')}">
+                Robot operativo: DB OK
+            </span>
+        </div>
+    </div>
+    <p style="margin:0.15rem 0 0;color:rgba(236,254,255,0.9)">Componi, esegui e salva query SELECT direttamente su Oracle.</p>
 </header>
 
 <main class="editor-layout">
@@ -362,6 +465,7 @@
                 <span class="spin-inline" id="runSpinner"></span>
                 ▶ Esegui
             </button>
+            <button class="btn btn-sec" id="btnFormatSql" type="button" title="Formatta il testo SQL/PL-SQL con indentazione e keyword uppercase">⟳ Formatta SQL/PL-SQL</button>
             <div class="spacer"></div>
 
             <!-- Salva come nuovo script -->
@@ -712,6 +816,130 @@
             .then(() => location.reload())
             .catch(() => location.reload());
     });
+
+    // ── Formattatore PL/SQL ──────────────────────────────────────────────────
+    function formatPlSql(rawSql) {
+        if (!rawSql || !rawSql.trim()) return rawSql;
+
+        // Protect string literals and comments from modification
+        const saved = [];
+        let cnt = 0;
+        function protect(m) {
+            const k = '\x00' + (cnt++) + '\x00';
+            saved.push(m);
+            return k;
+        }
+
+        let s = rawSql
+            .replace(/\/\*[\s\S]*?\*\//g, protect)
+            .replace(/--[^\n]*/g, protect)
+            .replace(/'(?:[^']|'')*'/g, protect);
+
+        // Normalize whitespace
+        s = s.replace(/\r?\n/g, ' ').replace(/\t/g, ' ').replace(/ +/g, ' ').trim();
+
+        // Uppercase keywords (longer phrases first)
+        const KEYWORDS = [
+            'SELECT DISTINCT','SELECT ALL','SELECT',
+            'GROUP BY','ORDER BY','PARTITION BY','CONNECT BY','START WITH',
+            'UNION ALL','UNION','INTERSECT','MINUS','EXCEPT',
+            'INNER JOIN','LEFT OUTER JOIN','RIGHT OUTER JOIN','FULL OUTER JOIN',
+            'LEFT JOIN','RIGHT JOIN','FULL JOIN','CROSS JOIN','NATURAL JOIN',
+            'INSERT INTO','DELETE FROM','MERGE INTO',
+            'CREATE OR REPLACE PROCEDURE','CREATE OR REPLACE FUNCTION',
+            'CREATE OR REPLACE PACKAGE BODY','CREATE OR REPLACE PACKAGE',
+            'CREATE OR REPLACE TRIGGER','CREATE OR REPLACE VIEW',
+            'CREATE TABLE','CREATE INDEX','CREATE VIEW','CREATE',
+            'ALTER TABLE','ALTER','DROP TABLE','DROP',
+            'IS NOT NULL','IS NULL','NOT IN','NOT EXISTS','NOT LIKE','NOT BETWEEN',
+            'END IF','END LOOP','END CASE',
+            'ROWS BETWEEN','RANGE BETWEEN','FETCH FIRST','FETCH NEXT','ROWS ONLY',
+            'FROM','WHERE','HAVING','SET','INTO','VALUES',
+            'ON','AS','IS','IN','EXISTS','LIKE','BETWEEN',
+            'AND','OR','NOT',
+            'NULL','TRUE','FALSE',
+            'DECLARE','BEGIN','END','EXCEPTION','RETURN','RAISE',
+            'IF','ELSIF','ELSEIF','ELSE','THEN',
+            'CASE','WHEN',
+            'FOR','WHILE','LOOP','EXIT WHEN','EXIT',
+            'CURSOR','OPEN','FETCH','CLOSE',
+            'PROCEDURE','FUNCTION','PACKAGE BODY','PACKAGE','TRIGGER',
+            'UPDATE','DELETE','INSERT',
+            'COMMIT','ROLLBACK','SAVEPOINT',
+            'WITH','OVER','DISTINCT','ALL',
+            'PRIOR','LEVEL','ROWNUM','ROWID'
+        ];
+
+        KEYWORDS.forEach(k => {
+            s = s.replace(
+                new RegExp('\\b' + k.replace(/ /g, '\\s+') + '\\b', 'gi'),
+                k
+            );
+        });
+
+        // Add newline before structural keywords
+        const NEWLINE_BEFORE = [
+            'SELECT DISTINCT','SELECT ALL','SELECT',
+            'GROUP BY','ORDER BY',
+            'UNION ALL','UNION','INTERSECT','MINUS','EXCEPT',
+            'INNER JOIN','LEFT OUTER JOIN','RIGHT OUTER JOIN','FULL OUTER JOIN',
+            'LEFT JOIN','RIGHT JOIN','FULL JOIN','CROSS JOIN','NATURAL JOIN',
+            'FROM','WHERE','HAVING','SET','VALUES',
+            'DECLARE','BEGIN','EXCEPTION',
+            'END IF','END LOOP','END CASE','END',
+            'ELSIF','ELSE',
+            'COMMIT','ROLLBACK',
+            'WITH'
+        ];
+
+        NEWLINE_BEFORE.forEach(k => {
+            s = s.replace(
+                new RegExp(' (' + k.replace(/ /g, '\\s+') + ')(?=[ (\\n]|$)', 'g'),
+                '\n$1'
+            );
+        });
+
+        // AND/OR on new indented lines
+        s = s.replace(/ (AND|OR) /g, '\n    $1 ');
+
+        // Newline after semicolon
+        s = s.replace(/;(?!\x00)/g, ';\n');
+
+        // Indentation pass
+        const lines = s.split('\n');
+        let depth = 0;
+        const IND = '    ';
+        const result = [];
+        const DEC_BEFORE = /^(END\b|ELSIF\b|ELSE\b|EXCEPTION\b)/i;
+        const INC_AFTER  = /^(BEGIN\b|DECLARE\b|THEN\b|ELSE\b|LOOP\b)/i;
+
+        lines.forEach(line => {
+            const t = line.trim();
+            if (!t) return;
+            if (DEC_BEFORE.test(t)) depth = Math.max(0, depth - 1);
+            result.push(IND.repeat(depth) + t);
+            if (INC_AFTER.test(t)) depth++;
+        });
+
+        s = result.join('\n');
+
+        // Restore protected fragments
+        s = s.replace(/\x00(\d+)\x00/g, (_, i) => saved[parseInt(i, 10)]);
+
+        return s;
+    }
+
+    const btnFormatSql = document.getElementById('btnFormatSql');
+    if (btnFormatSql) {
+        btnFormatSql.addEventListener('click', () => {
+            const formatted = formatPlSql(sqlEditor.value);
+            if (formatted !== null && formatted !== undefined) {
+                sqlEditor.value = formatted;
+                updateLineNumbers();
+                sqlEditor.focus();
+            }
+        });
+    }
 
     // ── Esegui query (AJAX) ──────────────────────────────────────────────────
     btnRun.addEventListener('click', async () => {

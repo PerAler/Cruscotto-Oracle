@@ -633,11 +633,16 @@ public class DashboardController {
                     .orElse("");
         }
 
+        boolean dbConnected = isDatabaseConnected();
+        List<com.example.cruscotto.model.ExecutionLogEntry> latestLogs = executionLogService.latest();
+        String robotState = resolveRobotState(dbConnected, error, latestLogs);
+
         model.addAttribute("allProcedures", allProcedures);
         model.addAttribute("selectedScript", effectiveSelection);
         model.addAttribute("sqlContent", sqlContent);
         model.addAttribute("successMessage", msg);
         model.addAttribute("errorMessage", error);
+        model.addAttribute("robotState", robotState);
         model.addAttribute("runtimePid", runtimePid);
         model.addAttribute("runtimeStartedAt", runtimeStartedAt);
         return "editor";

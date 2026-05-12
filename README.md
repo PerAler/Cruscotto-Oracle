@@ -32,7 +32,7 @@ Nel cruscotto il parametro verra mostrato automaticamente e inviato come stringa
 ```bash
 mvn spring-boot:run
 ```
-Apri `http://localhost:8080`.
+Apri `http://localhost:8090`.
 
 ## Uso scheduler
 Nel riquadro di ogni procedura inserisci un cron Spring a 6 campi, ad esempio:
