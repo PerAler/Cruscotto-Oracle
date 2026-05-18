@@ -7,7 +7,7 @@ Applicazione web Spring Boot 3 per la gestione, esecuzione e monitoraggio di scr
 ## Funzionalità
 
 ### Dashboard principale (`/dashboard`)
-- **Catalogo script SQL** — carica automaticamente tutti i file `.sql` presenti in `src/main/resources/sql`; filtro per nome in tempo reale.
+- **Catalogo script SQL** — carica automaticamente tutti i file `.sql` presenti nella cartella configurata (`app.sql.folder`, default `sql`); filtro per nome in tempo reale.
 - **Editor SQL rapido** — textarea con:
   - Syntax highlighting PL/SQL via Prism.js
   - Autocompletamento keyword SQL (Tab / frecce)
@@ -86,8 +86,12 @@ app.logs.max-size=500
 app.logs.persist.enabled=true
 ```
 
+In avvio da console, l'app chiede anche se vuoi sovrascrivere URL, username e password direttamente prima del bootstrap Spring e poi apre automaticamente il browser sulla dashboard.
+
+Quando parte, il terminale mostra tre richieste in ordine: `URL JDBC`, `Username JDBC`, `Password JDBC`. Inserisci il valore e premi `INVIO`; se vuoi mantenere quello già impostato, premi solo `INVIO`.
+
 ## Script SQL
-Inserisci i file `.sql` in `src/main/resources/sql`.  
+Inserisci i file `.sql` nella cartella configurata con `app.sql.folder` (default `sql`).  
 Per i parametri bind usa placeholder `:nomeparametro`, ad esempio:
 ```sql
 SELECT * FROM fatture WHERE anno = :anno AND stato = :stato
@@ -97,7 +101,7 @@ SELECT * FROM fatture WHERE anno = :anno AND stato = :stato
 ```bash
 cd C:\Temp\Cruscotto_Oracle
 mvn clean package -DskipTests
-java -jar target\cruscotto-oracle-0.0.1-SNAPSHOT.war
+java -jar target\cruscotto-oracle-1.0.4.war
 ```
 Apri `http://localhost:8090`.
 

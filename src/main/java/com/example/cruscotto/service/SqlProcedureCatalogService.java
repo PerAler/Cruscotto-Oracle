@@ -4,6 +4,7 @@ import com.example.cruscotto.model.ProcedureDefinition;
 import jakarta.annotation.PostConstruct;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -21,6 +22,7 @@ import java.util.LinkedHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 @Service
 public class SqlProcedureCatalogService {
@@ -33,6 +35,11 @@ public class SqlProcedureCatalogService {
     private static final String Q_QUOTE_CLOSERS = "])>}";
 
     private final Map<String, ProcedureDefinition> procedures = new ConcurrentHashMap<>();
+    private final Path sqlDir;
+
+    public SqlProcedureCatalogService(@Value("${app.sql.folder:sql}") String sqlFolder) {
+        this.sqlDir = Paths.get(sqlFolder).toAbsolutePath().normalize();
+    }
 
     @PostConstruct
     public void loadProcedures() {
@@ -43,31 +50,8 @@ public class SqlProcedureCatalogService {
         PathMatchingResourcePatternResolver resolver = new PathMatchingResourcePatternResolver();
         try {
             procedures.clear();
-            Resource[] resources = resolver.getResources("file:src/main/resources/sql/*.sql");
-            if (resources.length == 0) {
-                resources = resolver.getResources("classpath*:sql/*.sql");
-            }
-            for (Resource resource : resources) {
-                String filename = resource.getFilename();
-                if (filename == null || filename.isBlank()) {
-                    continue;
-                }
-
-                String sqlText = resource.getContentAsString(StandardCharsets.UTF_8);
-                String name = filename.replaceFirst("\\.sql$", "");
-                List<String> parameterNames = extractParameterNames(sqlText);
-                Map<String, String> parameterDescriptions = extractParameterDescriptions(sqlText);
-                long lastModifiedEpochMs = readLastModified(resource);
-
-                procedures.put(name, new ProcedureDefinition(
-                        name,
-                        "sql/" + filename,
-                        sqlText,
-                        parameterNames,
-                    parameterDescriptions,
-                        lastModifiedEpochMs
-                ));
-            }
+            loadClasspathSql(resolver);
+            loadFilesystemSql();
         } catch (IOException ex) {
             throw new IllegalStateException("Errore nel caricamento dei file SQL", ex);
         }
@@ -90,14 +74,12 @@ public class SqlProcedureCatalogService {
         if (normalizedSql.isBlank()) {
             throw new IllegalArgumentException("SQL vuoto: impossibile salvare il file");
         }
-        validateReadOnlySql(normalizedSql);
 
         String baseName = normalizeBaseName(requestedName);
         if (baseName.isBlank()) {
             throw new IllegalArgumentException("Nome file non valido");
         }
 
-        Path sqlDir = Paths.get("src", "main", "resources", "sql").toAbsolutePath().normalize();
         Path sqlFile = sqlDir.resolve(baseName + ".sql").normalize();
         if (!sqlFile.startsWith(sqlDir)) {
             throw new IllegalArgumentException("Percorso file non valido");
@@ -123,35 +105,20 @@ public class SqlProcedureCatalogService {
         if (normalizedSql.isBlank()) {
             throw new IllegalArgumentException("SQL vuoto: impossibile salvare il file");
         }
-        validateReadOnlySql(normalizedSql);
 
         if (existingName == null || existingName.isBlank()) {
             throw new IllegalArgumentException("Seleziona uno script valido da aggiornare");
         }
 
-        // Controlla se il nome esatto esiste nella mappa delle procedure (con gli spazi originali)
-        if (!procedures.containsKey(existingName)) {
-            // Fallback: prova con il nome normalizzato (per compatibilità)
-            String normalizedName = normalizeBaseName(existingName);
-            if (normalizedName.isBlank()) {
+        try {
+            String resolvedName = procedures.containsKey(existingName)
+                    ? existingName
+                    : normalizeBaseName(existingName);
+            if (resolvedName.isBlank()) {
                 throw new IllegalArgumentException("Seleziona uno script valido da aggiornare");
             }
-            return saveSqlFile(normalizedName, normalizedSql, true);
-        }
 
-        // Il file esiste nella mappa - salva con il nome originale (con spazi)
-        try {
-            // Tenta di salvare nella cartella src/main/resources/sql (utile per sviluppo)
-            Path sqlDir = Paths.get("src", "main", "resources", "sql").toAbsolutePath().normalize();
-            Path sqlFile = sqlDir.resolve(existingName + ".sql").normalize();
-            
-            // Se src/main/resources/sql non esiste, usa la cartella corrente
-            if (!Files.exists(sqlDir)) {
-                sqlDir = Paths.get(".").toAbsolutePath().normalize();
-                sqlFile = sqlDir.resolve("sql_updated").resolve(existingName + ".sql").normalize();
-            }
-            
-            // Verifica che il file sia nella cartella consentita
+            Path sqlFile = sqlDir.resolve(resolvedName + ".sql").normalize();
             if (!sqlFile.startsWith(sqlDir)) {
                 throw new IllegalArgumentException("Percorso file non valido");
             }
@@ -160,22 +127,78 @@ public class SqlProcedureCatalogService {
             Files.createDirectories(sqlFile.getParent());
             Files.writeString(sqlFile, content, StandardCharsets.UTF_8);
             reloadProcedures();
-            return existingName;
+            return resolvedName;
         } catch (IOException ex) {
             throw new IllegalStateException("Errore durante il salvataggio del file SQL: " + ex.getMessage(), ex);
         }
     }
 
-    private void validateReadOnlySql(String sqlText) {
-        String sanitized = stripIgnoredSections(sqlText).trim();
-        if (sanitized.isBlank()) {
-            throw new IllegalArgumentException("SQL non valido");
+    private void loadClasspathSql(PathMatchingResourcePatternResolver resolver) throws IOException {
+        for (String pattern : new String[]{"classpath*:sql/*.sql", "classpath*:sql/**/*.sql"}) {
+            for (Resource resource : resolver.getResources(pattern)) {
+                registerResource(resource);
+            }
+        }
+    }
+
+    private void loadFilesystemSql() throws IOException {
+        if (!Files.exists(sqlDir)) {
+            return;
         }
 
-        String upper = sanitized.toUpperCase();
-        if (!upper.startsWith("SELECT") && !upper.startsWith("WITH")) {
-            throw new IllegalArgumentException("Sono consentiti solo script SELECT o WITH");
+        try (Stream<Path> paths = Files.walk(sqlDir)) {
+            paths.filter(Files::isRegularFile)
+                    .filter(path -> path.getFileName().toString().toLowerCase().endsWith(".sql"))
+                    .sorted()
+                    .forEach(path -> {
+                        try {
+                            registerFile(path);
+                        } catch (IOException ex) {
+                            throw new IllegalStateException("Errore nel caricamento del file SQL: " + path, ex);
+                        }
+                    });
         }
+    }
+
+    private void registerResource(Resource resource) throws IOException {
+        String filename = resource.getFilename();
+        if (filename == null || filename.isBlank()) {
+            return;
+        }
+
+        String sqlText = resource.getContentAsString(StandardCharsets.UTF_8);
+        String name = filename.replaceFirst("\\.sql$", "");
+        List<String> parameterNames = extractParameterNames(sqlText);
+        Map<String, String> parameterDescriptions = extractParameterDescriptions(sqlText);
+        long lastModifiedEpochMs = readLastModified(resource);
+
+        procedures.put(name, new ProcedureDefinition(
+                name,
+                resource.getDescription(),
+                sqlText,
+                parameterNames,
+                parameterDescriptions,
+                lastModifiedEpochMs
+        ));
+    }
+
+    private void registerFile(Path file) throws IOException {
+        String filename = file.getFileName().toString();
+        String sqlText = Files.readString(file, StandardCharsets.UTF_8);
+        String name = filename.replaceFirst("\\.sql$", "");
+        List<String> parameterNames = extractParameterNames(sqlText);
+        Map<String, String> parameterDescriptions = extractParameterDescriptions(sqlText);
+        long lastModifiedEpochMs = Files.getLastModifiedTime(file).toMillis();
+        String relativePath = sqlDir.relativize(file).toString().replace('\\', '/');
+
+        procedures.put(name, new ProcedureDefinition(
+                name,
+                "file:" + relativePath,
+                sqlText,
+                parameterNames,
+                parameterDescriptions,
+                lastModifiedEpochMs
+        ));
     }
 
     private String normalizeBaseName(String requestedName) {

@@ -1,1 +1,3 @@
-select * from aler.vw_free_space where Tablespace in ('CAL_FATT','GIESCO','INDX','GIESCOBIG','GIESCONDX','ESTRAZIONI')
+SELECT *
+FROM aler.vw_free_space
+WHERE Tablespace IN ('CAL_FATT','GIESCO','INDX','GIESCOBIG','GIESCONDX','ESTRAZIONI')

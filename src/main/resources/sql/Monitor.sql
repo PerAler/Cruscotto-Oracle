@@ -1,5 +1,7 @@
-select * from (
-select * from log_msg
-where trunc(datainizio)=trunc(sysdate)
-order by 1 desc
-) where rownum <= :limite
+SELECT *
+FROM (
+SELECT *
+FROM log_msg
+WHERE trunc(datainizio)=trunc(sysdate)
+ORDER BY 1 desc )
+WHERE ROWNUM <= :limite

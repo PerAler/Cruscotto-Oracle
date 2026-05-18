@@ -954,6 +954,84 @@ th, td {
     to { transform: rotate(360deg); }
 }
 
+
+/* DBMS Output Styling */
+.dbms-output-cell {
+    text-align: center;
+}
+
+.btn-dbms-output {
+    background: #e8f4f8;
+    color: #0073aa;
+    border: 1px solid #a3d5e0;
+    border-radius: 5px;
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-dbms-output:hover {
+    background: #d0e9f2;
+    border-color: #0073aa;
+}
+
+.dbms-output-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(16, 37, 41, 0.6);
+    backdrop-filter: blur(3px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+}
+
+.dbms-output-content {
+    background: #fffdf7;
+    border: 2px solid #05668d;
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(16, 37, 41, 0.25);
+    max-width: 90vw;
+    max-height: 80vh;
+    width: 600px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.dbms-output-text {
+    flex: 1;
+    overflow: auto;
+    background: #f9f7f2;
+    border: none;
+    padding: 1rem;
+    font-family: "Courier New", monospace;
+    font-size: 0.85rem;
+    color: var(--ink);
+    resize: none;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.btn-close-dbms {
+    background: #b42318;
+    color: #fff;
+    border: none;
+    padding: 0.6rem 1rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 0 0 8px 8px;
+    transition: background 0.2s ease;
+}
+
+.btn-close-dbms:hover {
+    background: #8a1a12;
+}
+
 @media (max-width: 900px) {
     .layout {
         width: min(98vw, 980px);
@@ -971,5 +1049,9 @@ th, td {
     .sql-float-editor {
         width: calc(100% - 1rem);
         left: 0.5rem;
+    }
+
+    .dbms-output-content {
+        width: 95vw;
     }
 }

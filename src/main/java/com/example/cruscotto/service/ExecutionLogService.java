@@ -50,6 +50,7 @@ public class ExecutionLogService {
 
     public synchronized void clearErrorsForProcedure(String procedureName) {
         logBuffer.removeIf(e -> "KO".equals(e.status()) && procedureName.equals(e.procedureName()));
+        oracleStore.deleteErrorsForProcedure(procedureName);
     }
 
     public synchronized boolean deleteErrorAtIndex(int errorIndex) {

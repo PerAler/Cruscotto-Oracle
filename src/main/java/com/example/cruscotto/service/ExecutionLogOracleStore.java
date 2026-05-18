@@ -227,6 +227,26 @@ public class ExecutionLogOracleStore {
         }
     }
 
+    public int deleteErrorsForProcedure(String procedureName) {
+        if (!persistenceEnabled || procedureName == null || procedureName.isBlank()) {
+            return 0;
+        }
+        if (!ensureStoreReady()) {
+            return 0;
+        }
+
+        try {
+            return jdbcTemplate.update(
+                    "DELETE FROM CRUSCOTTO_EXEC_LOG WHERE STATUS = 'KO' AND PROCEDURE_NAME = ?",
+                    procedureName
+            );
+        } catch (Exception ex) {
+            logger.warn("Cancellazione errori persistiti per procedura non riuscita: {}", ex.getMessage());
+            persistenceAvailable.set(false);
+            return 0;
+        }
+    }
+
     public int trimToMaxRows(int maxRows) {
         if (!persistenceEnabled || maxRows <= 0) {
             return 0;

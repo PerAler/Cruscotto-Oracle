@@ -48,6 +48,7 @@
                 <th>Messaggio</th>
                 <th>Parametri</th>
                 <th>Output</th>
+                <th>DBMS Output</th>
             </tr>
             </thead>
             <tbody>
@@ -72,9 +73,21 @@
                     </div>
                     <span th:if="${log.outputHtmlFile() == null}" class="no-output">—</span>
                 </td>
+                <td>
+                    <div th:if="${log.dbmsOutput() != null and log.dbmsOutput() != ''}" class="dbms-output-cell">
+                        <button type="button" class="btn-dbms-output" th:attr="data-log-index=${logStat.index}">📄 Mostra</button>
+                        <div th:id="'dbms-output-' + ${logStat.index}" class="dbms-output-modal" style="display: none;">
+                            <div class="dbms-output-content">
+                                <textarea readonly class="dbms-output-text" th:text="${log.dbmsOutput()}"></textarea>
+                                <button type="button" class="btn-close-dbms" onclick="this.closest('.dbms-output-modal').style.display='none';">Chiudi</button>
+                            </div>
+                        </div>
+                    </div>
+                    <span th:if="${log.dbmsOutput() == null or log.dbmsOutput() == ''}" class="no-output">—</span>
+                </td>
             </tr>
             <tr th:if="${allLogs.isEmpty()}">
-                <td colspan="7">Nessun log disponibile.</td>
+                <td colspan="8">Nessun log disponibile.</td>
             </tr>
             </tbody>
         </table>
@@ -147,6 +160,25 @@
                     window.location.href = downloadUrl;
                 }
             });
+        });
+
+        // Gestione DBMS Output modals
+        document.querySelectorAll('.btn-dbms-output').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                var logIndex = this.getAttribute('data-log-index');
+                var modal = document.getElementById('dbms-output-' + logIndex);
+                if (modal) {
+                    modal.style.display = modal.style.display === 'none' ? 'block' : 'none';
+                }
+            });
+        });
+
+        // Chiudi modal quando si clicca fuori
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('dbms-output-modal')) {
+                e.target.style.display = 'none';
+            }
         });
     });
 </script>

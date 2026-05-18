@@ -2,6 +2,17 @@
 
 Tutte le modifiche rilevanti a questo progetto sono documentate in questo file.
 
+## [1.0.4] - 2026-05-18
+### Fixed
+- Credenziali Oracle spostate su configurazione parametrica e prompt interattivo all'avvio.
+- Test resi indipendenti da Oracle reale.
+- Cancellazione errori allineata tra memoria e persistenza Oracle.
+- Cattura DBMS_OUTPUT corretta sulla stessa connessione JDBC della procedura.
+
+### Changed
+- Cartella SQL resa configurabile e caricamento esteso alle sottocartelle.
+- Apertura automatica del browser dopo il bootstrap della web app.
+
 ## [1.0.2] - 2026-05-07
 ### Added
 - Dialog di scelta per i file XLSX: opzione di apertura nel browser o download diretto.

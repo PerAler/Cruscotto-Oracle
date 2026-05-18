@@ -302,7 +302,7 @@ public class DashboardController {
         String errorMessage = null;
         try {
             catalogService.reloadProcedures();
-            successMessage = "Catalogo SQL ricaricato da src/main/resources/sql";
+            successMessage = "Catalogo SQL ricaricato";
         } catch (Exception ex) {
             errorMessage = "Errore durante la ricarica del catalogo SQL: " + ex.getMessage();
         }
@@ -351,7 +351,7 @@ public class DashboardController {
         try {
             String requestedName = resolveQuerySaveName(queryFileName, queryLabel);
             String savedName = catalogService.saveSqlFile(requestedName, sqlText, false);
-            successMessage = "Query salvata in src/main/resources/sql come '" + savedName + ".sql'";
+            successMessage = "Query salvata come '" + savedName + ".sql'";
             nextSelection = savedName;
         } catch (Exception ex) {
             errorMessage = "Salvataggio query: " + ex.getMessage();
