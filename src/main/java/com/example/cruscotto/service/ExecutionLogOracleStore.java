@@ -31,7 +31,8 @@ public class ExecutionLogOracleStore {
                         MESSAGE VARCHAR2(4000),
                         PARAMETERS_TEXT CLOB,
                         OUTPUT_HTML_FILE VARCHAR2(512),
-                        STACK_TRACE CLOB
+                        STACK_TRACE CLOB,
+                        DBMS_OUTPUT CLOB
                     )';
             EXCEPTION
                 WHEN OTHERS THEN
@@ -50,8 +51,9 @@ public class ExecutionLogOracleStore {
                 MESSAGE,
                 PARAMETERS_TEXT,
                 OUTPUT_HTML_FILE,
-                STACK_TRACE
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                STACK_TRACE,
+                DBMS_OUTPUT
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
 
     private static final String DELETE_ONE_SQL = """
@@ -67,6 +69,7 @@ public class ExecutionLogOracleStore {
                       AND DURATION_MS = ?
                       AND NVL(MESSAGE, ' ') = NVL(?, ' ')
                       AND NVL(OUTPUT_HTML_FILE, ' ') = NVL(?, ' ')
+                      AND NVL(DBMS_OUTPUT, ' ') = NVL(?, ' ')
                     ORDER BY EVENT_TS DESC
                 )
                 WHERE ROWNUM = 1
@@ -96,23 +99,25 @@ public class ExecutionLogOracleStore {
                      PROCEDURE_NAME,
                      STATUS,
                      DURATION_MS,
-                     MESSAGE,
-                     PARAMETERS_TEXT,
-                     OUTPUT_HTML_FILE,
-                     STACK_TRACE
-                 FROM (
-                  SELECT EVENT_TS,
-                      PROCEDURE_NAME,
-                      STATUS,
-                      DURATION_MS,
                       MESSAGE,
                       PARAMETERS_TEXT,
                       OUTPUT_HTML_FILE,
-                      STACK_TRACE
-                  FROM CRUSCOTTO_EXEC_LOG
-                  ORDER BY EVENT_TS DESC
-                 )
-                 WHERE ROWNUM <= ?
+                      STACK_TRACE,
+                      DBMS_OUTPUT
+                  FROM (
+                   SELECT EVENT_TS,
+                       PROCEDURE_NAME,
+                       STATUS,
+                      DURATION_MS,
+                       MESSAGE,
+                       PARAMETERS_TEXT,
+                       OUTPUT_HTML_FILE,
+                       STACK_TRACE,
+                       DBMS_OUTPUT
+                   FROM CRUSCOTTO_EXEC_LOG
+                   ORDER BY EVENT_TS DESC
+                  )
+                  WHERE ROWNUM <= ?
                  """;
 
     private final JdbcTemplate jdbcTemplate;
@@ -140,10 +145,11 @@ public class ExecutionLogOracleStore {
                     entry.procedureName(),
                     entry.status(),
                     entry.durationMs(),
-                    trimForVarchar(entry.message(), 4000),
-                    stringifyParams(entry.parameters()),
-                    trimForVarchar(entry.outputHtmlFile(), 512),
-                    entry.stackTrace());
+                     trimForVarchar(entry.message(), 4000),
+                     stringifyParams(entry.parameters()),
+                     trimForVarchar(entry.outputHtmlFile(), 512),
+                     entry.stackTrace(),
+                     trimForClob(entry.dbmsOutput()));
         } catch (Exception ex) {
             logger.warn("Persistenza log non riuscita: {}", ex.getMessage());
             persistenceAvailable.set(false);
@@ -176,7 +182,8 @@ public class ExecutionLogOracleStore {
                         rs.getString("MESSAGE"),
                         parseParamsText(rs.getString("PARAMETERS_TEXT")),
                         rs.getString("OUTPUT_HTML_FILE"),
-                        rs.getString("STACK_TRACE")
+                        rs.getString("STACK_TRACE"),
+                        rs.getString("DBMS_OUTPUT")
                 );
             });
         } catch (Exception ex) {
@@ -201,7 +208,8 @@ public class ExecutionLogOracleStore {
                     entry.status(),
                     entry.durationMs(),
                     trimForVarchar(entry.message(), 4000),
-                    trimForVarchar(entry.outputHtmlFile(), 512));
+                    trimForVarchar(entry.outputHtmlFile(), 512),
+                    trimForClob(entry.dbmsOutput()));
             return updated > 0;
         } catch (Exception ex) {
             logger.warn("Cancellazione log persistito non riuscita: {}", ex.getMessage());
@@ -295,6 +303,13 @@ public class ExecutionLogOracleStore {
             return value;
         }
         return value.substring(0, maxLen);
+    }
+
+    private String trimForClob(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value;
     }
 
     private Map<String, Object> parseParamsText(String raw) {

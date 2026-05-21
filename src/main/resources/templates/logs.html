@@ -52,7 +52,7 @@
             </tr>
             </thead>
             <tbody>
-            <tr th:each="log : ${allLogs}"
+            <tr th:each="log, logStat : ${allLogs}"
                 class="log-row"
                 th:attr="data-procedure=${log.procedureName()},data-status=${log.status()},data-message=${log.message()},data-has-output=${log.outputHtmlFile() != null}">
                 <td th:text="${log.timestamp()}"></td>

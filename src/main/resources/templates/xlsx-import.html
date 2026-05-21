@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="it" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Import XLSX — Cruscotto Oracle</title>
+    <link rel="stylesheet" th:href="@{/dashboard.css(v=${#temporals.format(#temporals.createNow(), 'yyyyMMddHHmmss')})}">
+    <style>
+        .import-grid {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .import-meta {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 0.75rem;
+        }
+
+        .meta-box {
+            padding: 0.75rem;
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: #fffef9;
+        }
+
+        .meta-box strong {
+            display: block;
+            margin-bottom: 0.2rem;
+        }
+
+        .column-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 0.75rem;
+        }
+
+        .column-card {
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            background: #fff;
+            padding: 0.75rem;
+        }
+
+        .column-card label {
+            display: flex;
+            gap: 0.5rem;
+            align-items: flex-start;
+            font-weight: 600;
+        }
+
+        .column-card small {
+            display: block;
+            margin-top: 0.35rem;
+            color: #5a7076;
+        }
+
+        .button-row {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .preview-sql {
+            width: 100%;
+            min-height: 170px;
+            font-family: Consolas, "Courier New", monospace;
+            font-size: 0.88rem;
+        }
+    </style>
+</head>
+<body>
+<header class="hero">
+    <h1>Import XLSX in Oracle</h1>
+    <p>Carica un file, proponi i campi, scegli le colonne e crea/importa la tabella.</p>
+    <div style="margin-top:1rem">
+        <a href="/dashboard" class="output-link secondary-link">← Torna al cruscotto</a>
+    </div>
+</header>
+
+<main class="layout import-grid">
+    <section class="card messages" th:if="${successMessage != null or errorMessage != null}">
+        <p class="ok" th:if="${successMessage != null}" th:text="${successMessage}"></p>
+        <p class="ko" th:if="${errorMessage != null}" th:text="${errorMessage}"></p>
+    </section>
+
+    <section class="card">
+        <h2>1. File XLSX e tabella</h2>
+        <form method="post" enctype="multipart/form-data">
+            <div class="form-block">
+                <label for="tableName">Nome tabella Oracle</label>
+                <input type="text" id="tableName" name="tableName" th:value="${tableName}" placeholder="es. FATTURE_XLSX" required>
+
+                <label for="xlsxFile">File XLSX</label>
+                <input type="file" id="xlsxFile" name="xlsxFile" accept=".xlsx">
+                <input type="hidden" name="importToken" th:value="${importToken}">
+            </div>
+
+            <div class="button-row">
+                <button type="submit" formaction="/xlsx-import/analyze">Analizza file</button>
+                <button type="submit" formaction="/xlsx-import/read-structure" class="secondary">Leggi struttura DB</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="card" th:if="${analysis != null}">
+        <h2>2. Proposta colonne</h2>
+        <div class="import-meta">
+            <div class="meta-box">
+                <strong>File</strong>
+                <span th:text="${analysis.fileName()}"></span>
+            </div>
+            <div class="meta-box">
+                <strong>Foglio</strong>
+                <span th:text="${analysis.sheetName()}"></span>
+            </div>
+            <div class="meta-box">
+                <strong>Righe dati</strong>
+                <span th:text="${analysis.dataRowCount()}"></span>
+            </div>
+        </div>
+
+        <form method="post" class="form-block" enctype="multipart/form-data">
+            <input type="hidden" name="tableName" th:value="${tableName}">
+            <input type="hidden" name="importToken" th:value="${importToken}">
+
+            <div class="column-grid" style="margin: 1rem 0;">
+                <article class="column-card" th:each="column : ${analysis.columns()}">
+                    <label>
+                        <input type="checkbox"
+                               name="selectedColumns"
+                               th:value="${column.index()}"
+                               th:checked="${selectedColumnIndexes.contains(column.index())}"
+                               th:attr="data-oracle-name=${column.oracleName()},data-oracle-type=${column.oracleType()}">
+                        <span>
+                            <span th:text="${column.oracleName()}"></span>
+                            <small>
+                                Origine: <span th:text="${column.sourceName()}"></span><br>
+                                Tipo: <span th:text="${column.oracleType()}"></span><br>
+                                Esempio: <span th:text="${column.sampleValue()}"></span>
+                            </small>
+                        </span>
+                    </label>
+                </article>
+            </div>
+
+            <label for="createSqlPreview">DDL proposto</label>
+            <textarea id="createSqlPreview"
+                      class="preview-sql"
+                      readonly
+                      th:attr="data-table-name=${tableName}"
+                      th:text="${createSqlPreview != null ? createSqlPreview : analysis.createTableSql()}"></textarea>
+
+            <label style="display:flex;align-items:center;gap:0.5rem">
+                <input type="checkbox" name="truncateBeforeImport" value="true">
+                <span>Svuota la tabella prima dell'import</span>
+            </label>
+
+            <div class="button-row">
+                <button type="submit" formaction="/xlsx-import/create-table">Crea tabella</button>
+                <button type="submit" formaction="/xlsx-import/import" class="secondary">Importa righe selezionate</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="card" th:if="${dbStructure != null}">
+        <h2>3. Struttura DB</h2>
+        <table>
+            <thead>
+            <tr>
+                <th>Pos.</th>
+                <th>Colonna</th>
+                <th>Tipo</th>
+                <th>Lunghezza</th>
+                <th>Precisione</th>
+                <th>Scala</th>
+                <th>Nullable</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="col : ${dbStructure}">
+                <td th:text="${col.position()}"></td>
+                <td th:text="${col.columnName()}"></td>
+                <td th:text="${col.dataType()}"></td>
+                <td th:text="${col.dataLength()}"></td>
+                <td th:text="${col.dataPrecision()}"></td>
+                <td th:text="${col.dataScale()}"></td>
+                <td th:text="${col.nullable()}"></td>
+            </tr>
+            <tr th:if="${dbStructure.isEmpty()}">
+                <td colspan="7">Tabella non trovata o senza colonne visibili.</td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="card" th:if="${analysis != null and !analysis.previewRows().isEmpty()}">
+        <h2>Preview dati</h2>
+        <table>
+            <thead>
+            <tr>
+                <th th:each="column : ${analysis.columns()}" th:text="${column.oracleName()}"></th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="row : ${analysis.previewRows()}">
+                <td th:each="cell : ${row}" th:text="${cell}"></td>
+            </tr>
+            </tbody>
+        </table>
+    </section>
+</main>
+
+<script th:inline="javascript">
+    (function () {
+        var preview = document.getElementById('createSqlPreview');
+        var tableNameInput = document.getElementById('tableName');
+        var checkboxes = Array.from(document.querySelectorAll('input[name="selectedColumns"]'));
+        if (!preview || checkboxes.length === 0) {
+            return;
+        }
+
+        function buildCreateSql() {
+            var selected = checkboxes.filter(function (checkbox) { return checkbox.checked; });
+            var tableName = tableNameInput ? tableNameInput.value.trim() : (preview.getAttribute('data-table-name') || 'XLSX_TABLE');
+            if (selected.length === 0) {
+                preview.value = 'Seleziona almeno una colonna per generare il DDL.';
+                return;
+            }
+
+            var lines = selected.map(function (checkbox) {
+                return '    ' + checkbox.getAttribute('data-oracle-name') + ' ' + checkbox.getAttribute('data-oracle-type');
+            });
+            preview.value = 'CREATE TABLE ' + (tableName || 'XLSX_TABLE') + ' (\n' + lines.join(',\n') + '\n)';
+        }
+
+        checkboxes.forEach(function (checkbox) {
+            checkbox.addEventListener('change', buildCreateSql);
+        });
+        if (tableNameInput) {
+            tableNameInput.addEventListener('input', buildCreateSql);
+        }
+
+        buildCreateSql();
+    })();
+</script>
+</body>
+</html>

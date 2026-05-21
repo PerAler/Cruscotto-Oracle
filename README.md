@@ -43,6 +43,7 @@ Applicazione web Spring Boot 3 per la gestione, esecuzione e monitoraggio di scr
 ### Log e monitoraggio
 - **Log esecuzioni** (`/logs`) — tabella con filtro per stato (OK/KO), link ai file output (HTML/CSV/XLSX)
 - **Log errori** (`/errors`) — vista dedicata ai soli KO
+- **Import XLSX** (`/xlsx-import`) — upload file XLSX, analisi colonne, lettura struttura tabella Oracle, proposta DDL dinamica solo sulle colonne selezionate, import selettivo e svuotamento opzionale della tabella prima del caricamento
 - **Persistenza log su Oracle** — tabella `CRUSCOTTO_EXEC_LOG`; ricaricamento all'avvio (`app.logs.persist.enabled=true`)
 - Retention log configurabile (`app.logs.max-size`)
 
@@ -59,6 +60,11 @@ Applicazione web Spring Boot 3 per la gestione, esecuzione e monitoraggio di scr
 | `/editor/update` | POST | Aggiorna script dall'editor |
 | `/editor/load-script` | GET | Carica script (AJAX, ritorna JSON) |
 | `/catalog/reload` | POST | Ricarica catalogo da disco |
+| `/xlsx-import` | GET | Pagina importazione XLSX |
+| `/xlsx-import/analyze` | POST | Analizza file XLSX caricato |
+| `/xlsx-import/read-structure` | POST | Legge la struttura di una tabella Oracle |
+| `/xlsx-import/create-table` | POST | Crea la tabella Oracle proposta |
+| `/xlsx-import/import` | POST | Importa le colonne selezionate nel DB |
 | `/output/{filename}` | GET | Visualizza/scarica file output |
 | `/logs` | GET | Pagina log esecuzioni |
 | `/errors` | GET | Pagina log errori |
@@ -84,11 +90,22 @@ app.output.folder=output
 app.output.max-items=100
 app.logs.max-size=500
 app.logs.persist.enabled=true
+spring.servlet.multipart.max-file-size=25MB
+spring.servlet.multipart.max-request-size=25MB
 ```
 
-In avvio da console, l'app chiede anche se vuoi sovrascrivere URL, username e password direttamente prima del bootstrap Spring e poi apre automaticamente il browser sulla dashboard.
+In avvio da console, l'app chiede URL, username e password JDBC prima del bootstrap Spring e poi apre automaticamente il browser sulla dashboard. I valori inseriti vengono salvati in `config/cruscotto-oracle-local.properties` e ricaricati al prossimo avvio.
 
 Quando parte, il terminale mostra tre richieste in ordine: `URL JDBC`, `Username JDBC`, `Password JDBC`. Inserisci il valore e premi `INVIO`; se vuoi mantenere quello già impostato, premi solo `INVIO`.
+
+Per il DBMS spool, se vuoi usarlo su Oracle 11g crea anche la tabella temporanea:
+
+```sql
+CREATE GLOBAL TEMPORARY TABLE app_dbms_output_lines (
+  line_num NUMBER PRIMARY KEY,
+  line_text CLOB
+) ON COMMIT DELETE ROWS;
+```
 
 ## Script SQL
 Inserisci i file `.sql` nella cartella configurata con `app.sql.folder` (default `sql`).  

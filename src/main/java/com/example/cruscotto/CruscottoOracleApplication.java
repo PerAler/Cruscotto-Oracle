@@ -8,12 +8,18 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 import java.io.Console;
+import java.io.IOException;
 import java.awt.Desktop;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Properties;
 import java.net.URI;
 
 @SpringBootApplication
 @EnableScheduling
 public class CruscottoOracleApplication extends SpringBootServletInitializer {
+
+    private static final Path LOCAL_CONFIG_FILE = Path.of("config", "cruscotto-oracle-local.properties");
 
     @Override
     protected SpringApplicationBuilder configure(SpringApplicationBuilder application) {
@@ -21,6 +27,7 @@ public class CruscottoOracleApplication extends SpringBootServletInitializer {
     }
 
     public static void main(String[] args) {
+        loadLocalDatasourceOverrides();
         promptForDatasourceOverrides();
         ConfigurableApplicationContext context = SpringApplication.run(CruscottoOracleApplication.class, args);
         openBrowser(context);
@@ -60,10 +67,7 @@ public class CruscottoOracleApplication extends SpringBootServletInitializer {
         setIfNotBlank("spring.datasource.url", url);
         setIfNotBlank("spring.datasource.username", username);
         setIfNotBlank("spring.datasource.password", password);
-
-        setIfNotBlank("ORACLE_JDBC_URL", url);
-        setIfNotBlank("ORACLE_JDBC_USERNAME", username);
-        setIfNotBlank("ORACLE_JDBC_PASSWORD", password);
+        persistLocalDatasourceOverrides(url, username, password);
     }
 
     private static String readLine(Console console, String label, String currentValue) {
@@ -88,6 +92,38 @@ public class CruscottoOracleApplication extends SpringBootServletInitializer {
     private static void setIfNotBlank(String key, String value) {
         if (value != null && !value.isBlank()) {
             System.setProperty(key, value);
+        }
+    }
+
+    private static void loadLocalDatasourceOverrides() {
+        if (!Files.exists(LOCAL_CONFIG_FILE)) {
+            return;
+        }
+
+        Properties properties = new Properties();
+        try (var inputStream = Files.newInputStream(LOCAL_CONFIG_FILE)) {
+            properties.load(inputStream);
+            setIfNotBlank("spring.datasource.url", properties.getProperty("spring.datasource.url"));
+            setIfNotBlank("spring.datasource.username", properties.getProperty("spring.datasource.username"));
+            setIfNotBlank("spring.datasource.password", properties.getProperty("spring.datasource.password"));
+        } catch (IOException ex) {
+            System.err.println("Impossibile leggere la configurazione locale Oracle: " + ex.getMessage());
+        }
+    }
+
+    private static void persistLocalDatasourceOverrides(String url, String username, String password) {
+        Properties properties = new Properties();
+        properties.setProperty("spring.datasource.url", url);
+        properties.setProperty("spring.datasource.username", username);
+        properties.setProperty("spring.datasource.password", password);
+
+        try {
+            Files.createDirectories(LOCAL_CONFIG_FILE.getParent());
+            try (var outputStream = Files.newOutputStream(LOCAL_CONFIG_FILE)) {
+                properties.store(outputStream, "Cruscotto Oracle local datasource overrides");
+            }
+        } catch (IOException ex) {
+            System.err.println("Impossibile salvare la configurazione locale Oracle: " + ex.getMessage());
         }
     }
 

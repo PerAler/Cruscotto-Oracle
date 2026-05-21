@@ -18,6 +18,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -170,7 +171,7 @@ public class QueryOutputHtmlService {
                     Row excelRow = sheet.createRow(rowIndex);
                     for (int colIndex = 0; colIndex < header.size(); colIndex++) {
                         String value = colIndex < rowData.size() ? rowData.get(colIndex) : "";
-                        excelRow.createCell(colIndex).setCellValue(truncateCellValue(value));
+                        setCellValueSafely(excelRow.createCell(colIndex), truncateCellValue(value));
                     }
                 }
 
@@ -294,6 +295,76 @@ public class QueryOutputHtmlService {
             return value.substring(0, 32764) + "...";
         }
         return value;
+    }
+
+    private void setCellValueSafely(Cell cell, String rawValue) {
+        if (cell == null) {
+            return;
+        }
+
+        if (rawValue == null) {
+            cell.setBlank();
+            return;
+        }
+
+        String value = rawValue.trim();
+        if (value.isEmpty()) {
+            cell.setBlank();
+            return;
+        }
+
+        if (isSafeNumericValue(value)) {
+            try {
+                BigDecimal numericValue = new BigDecimal(value);
+                if (numericValue.scale() <= 0) {
+                    long longValue = numericValue.longValueExact();
+                    cell.setCellValue(longValue);
+                } else {
+                    cell.setCellValue(numericValue.doubleValue());
+                }
+                return;
+            } catch (ArithmeticException | NumberFormatException ex) {
+                // Se il numero è troppo grande o non perfettamente rappresentabile,
+                // lo lasciamo come testo per non alterare il dato.
+            }
+        }
+
+        cell.setCellValue(value);
+    }
+
+    private boolean isSafeNumericValue(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+
+        String normalized = value.trim();
+        if (!normalized.matches("[+-]?(?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][+-]?\\d+)?")) {
+            return false;
+        }
+
+        String unsigned = normalized.startsWith("+") || normalized.startsWith("-")
+                ? normalized.substring(1)
+                : normalized;
+
+        if (unsigned.startsWith("0") && unsigned.length() > 1 && !unsigned.startsWith("0.") && !unsigned.startsWith("0e") && !unsigned.startsWith("0E")) {
+            return false;
+        }
+
+        int significantDigits = countSignificantDigits(unsigned);
+        return significantDigits <= 15;
+    }
+
+    private int countSignificantDigits(String value) {
+        String digitsOnly = value.replaceAll("[^0-9]", "");
+        if (digitsOnly.isEmpty()) {
+            return 0;
+        }
+
+        int firstNonZero = 0;
+        while (firstNonZero < digitsOnly.length() && digitsOnly.charAt(firstNonZero) == '0') {
+            firstNonZero++;
+        }
+        return digitsOnly.length() - firstNonZero;
     }
 
     private String buildCsvBackedHtml(String csvFilename,
