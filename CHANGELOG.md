@@ -2,6 +2,19 @@
 
 Tutte le modifiche rilevanti a questo progetto sono documentate in questo file.
 
+## [1.0.5] - 2026-05-22
+### Added
+- **Schema Browser Sidebar nell'Editor SQL** — Pannello laterale collassabile che visualizza tabelle e viste dello schema Oracle corrente
+- **Filtro di ricerca real-time** — Ricerca case-insensitive con contatore dinamico aggiornato in base ai risultati
+- **Scrollbar interna per gruppo** — Ogni gruppo (TABLES/VIEWS) ha scroll indipendente con max-height 200px per visualizzare tutti gli oggetti
+- **Inserimento nome tabella/vista** — Click su un oggetto inserisce il nome nel punto di cursore dell'editor SQL
+- **Endpoint REST `/api/schema`** — Recupera tabelle da `user_tables` e viste da `user_views` con grouping automatico
+- **OracleSchemaService** — Nuovo servizio per interrogazione dello schema Oracle con metodi di grouping per tipo
+
+### Changed
+- Editor SQL: layout aggiornato a flex con sidebar (responsive, collassa su mobile)
+- Scrollbar custom e styling improved per migliore UX
+
 ## [1.0.4] - 2026-05-18
 ### Fixed
 - Credenziali Oracle spostate su configurazione parametrica e prompt interattivo all'avvio.

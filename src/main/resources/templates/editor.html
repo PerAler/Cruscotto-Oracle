@@ -260,6 +260,277 @@
             margin-left: 0.4rem;
         }
 
+        /* ── Schema sidebar panel ────────────────────────────────────────────── */
+        .schema-sidebar {
+            width: 280px;
+            max-height: 520px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: linear-gradient(135deg, #f8fbfd 0%, #f0f7fb 100%);
+            overflow-y: auto;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .schema-header {
+            padding: 0.75rem;
+            background: linear-gradient(135deg, #e8f2f8 0%, #d8e9f3 100%);
+            border-bottom: 1px solid var(--line);
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: #0891a6;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-shrink: 0;
+        }
+
+        .schema-header-icon {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            background: linear-gradient(135deg, #0891a6 0%, #0369a1 100%);
+            border-radius: 3px;
+            font-size: 0.7rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-weight: 900;
+        }
+
+        .schema-content {
+            flex: 1;
+            overflow: hidden;
+            padding: 0.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .schema-search {
+            flex-shrink: 0;
+            padding: 0.5rem;
+            border-bottom: 1px solid var(--line);
+        }
+
+        .schema-search input {
+            width: 100%;
+            padding: 0.4rem 0.6rem;
+            border: 1px solid #bae6fd;
+            border-radius: 5px;
+            font-size: 0.75rem;
+            background: #fff;
+            color: #17353c;
+            transition: all 0.2s;
+        }
+
+        .schema-search input:focus {
+            outline: none;
+            border-color: #7dd3fc;
+            box-shadow: 0 0 0 2px rgba(7, 105, 161, 0.1);
+        }
+
+        .schema-search input::placeholder {
+            color: #9ca3af;
+        }
+
+        .schema-groups-container {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .schema-group {
+            margin-bottom: 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .schema-group-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 0.5rem;
+            background: linear-gradient(90deg, #e0f2fe 0%, #f0f9ff 100%);
+            border: 1px solid #bae6fd;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: #0369a1;
+            transition: all 0.2s;
+            user-select: none;
+        }
+
+        .schema-group-toggle:hover {
+            background: linear-gradient(90deg, #bae6fd 0%, #e0f2fe 100%);
+            border-color: #7dd3fc;
+        }
+
+        .schema-group-toggle .arrow {
+            display: inline-block;
+            width: 14px;
+            text-align: center;
+            transition: transform 0.2s;
+            font-size: 0.75rem;
+        }
+
+        .schema-group-toggle.collapsed .arrow {
+            transform: rotate(-90deg);
+        }
+
+        .schema-items {
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+            padding: 0.3rem 0 0.3rem 1rem;
+            max-height: 200px;
+            overflow-y: auto;
+            transition: all 0.2s;
+            opacity: 1;
+            flex-shrink: 1;
+            min-height: 0;
+        }
+
+        .schema-items::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .schema-items::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .schema-items::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+
+        .schema-items::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        .schema-items.collapsed {
+            max-height: 0;
+            opacity: 0;
+            overflow: hidden;
+            padding: 0;
+        }
+
+        .schema-items.hidden {
+            display: none;
+        }
+
+        .schema-item {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.25rem 0.4rem;
+            font-size: 0.75rem;
+            color: #475569;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.15s;
+            user-select: none;
+            flex-shrink: 0;
+        }
+
+        .schema-item.hidden {
+            display: none;
+        }
+
+        .schema-item:hover {
+            background: #e0f2fe;
+            color: #0369a1;
+            padding-left: 0.6rem;
+        }
+
+        .schema-item-icon {
+            width: 12px;
+            height: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65rem;
+            font-weight: bold;
+        }
+
+        .schema-item.table .schema-item-icon {
+            color: #8b5cf6;
+        }
+
+        .schema-item.view .schema-item-icon {
+            color: #3b82f6;
+        }
+
+        .schema-item-name {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-family: 'Consolas', 'Cascadia Code', 'Courier New', monospace;
+        }
+
+        .schema-error {
+            padding: 0.75rem;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 5px;
+            margin: 0.5rem;
+            font-size: 0.75rem;
+            color: #991b1b;
+        }
+
+        .schema-group.hidden {
+            display: none;
+        }
+
+        .schema-loading {
+            padding: 1rem;
+            text-align: center;
+            font-size: 0.8rem;
+            color: #999;
+        }
+
+        /* ── Layout con sidebar ──────────────────────────────────────────────── */
+        .editor-with-sidebar {
+            display: flex;
+            gap: 1rem;
+            width: 100%;
+        }
+
+        .editor-main {
+            flex: 1;
+            min-width: 0;
+        }
+
+        @media (max-width: 1024px) {
+            .schema-sidebar {
+                width: 240px;
+            }
+            .editor-with-sidebar {
+                gap: 0.75rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .editor-with-sidebar {
+                flex-direction: column;
+            }
+            .schema-sidebar {
+                width: 100%;
+                max-height: 300px;
+            }
+        }
+
+        /* ── Spinner ─────────────────────────────────────────────────────────── */
+
         /* ── Spinner inline ──────────────────────────────────────────────── */
         .spin-inline {
             display: inline-block;
@@ -397,8 +668,28 @@
     <div th:if="${successMessage != null}" class="msg-bar ok" th:text="${successMessage}"></div>
     <div th:if="${errorMessage != null}"  class="msg-bar ko" th:text="${errorMessage}"></div>
 
-    <!-- ── Card principale editor ─────────────────────────────────────────── -->
-    <section class="card">
+    <!-- ── Layout con sidebar ─────────────────────────────────────────────── -->
+    <div class="editor-with-sidebar">
+
+        <!-- Schema sidebar (tables & views) -->
+        <aside class="schema-sidebar" id="schemaSidebar">
+            <div class="schema-header">
+                <span class="schema-header-icon">⬚</span>
+                Schema
+            </div>
+            <div class="schema-content">
+                <div class="schema-search">
+                    <input type="text" id="schemaFilter" placeholder="🔍 Cerca tabella/vista..." spellcheck="false">
+                </div>
+                <div class="schema-groups-container" id="schemaContent">
+                    <div class="schema-loading">Caricamento...</div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- ── Card principale editor ─────────────────────────────────────────── -->
+        <div class="editor-main">
+            <section class="card">
 
         <!-- Header card -->
         <div class="page-header" style="margin-bottom:0.8rem">
@@ -483,9 +774,11 @@
                 <button class="btn btn-upd" id="btnUpdate" type="button"
                         th:disabled="${selectedScript == null}">✏ Aggiorna script</button>
             </form>
-        </div>
+    </div>
 
     </section>
+    </div>
+    </div>
 
     <!-- ── Pannello risultati ───────────────────────────────────────────────── -->
     <section class="card" id="resultPanel">
@@ -1224,6 +1517,132 @@
         btnUpdate.disabled = true;
         document.getElementById('updateSelectedScript').value = '';
     }
+
+    // ── Schema sidebar (load tables & views) ──────────────────────────────────────
+    const schemaFilter = document.getElementById('schemaFilter');
+    
+    function loadSchemaObjects() {
+        const schemaContent = document.getElementById('schemaContent');
+        fetch('/api/schema')
+            .then(r => r.json())
+            .then(data => {
+                if (!data.ok) {
+                    schemaContent.innerHTML = '<div class="schema-error">Errore: ' + (data.error || 'Unknown error') + '</div>';
+                    return;
+                }
+
+                const schema = data.schema || {};
+                let html = '';
+
+                for (const groupKey of Object.keys(schema)) {
+                    const items = schema[groupKey] || [];
+                    if (items.length === 0) continue;
+
+                    const groupId = 'schema-group-' + groupKey.toLowerCase();
+                    const itemsId = 'schema-items-' + groupKey.toLowerCase();
+                    
+                    html += '<div class="schema-group" data-group-key="' + groupKey + '">';
+                    html += '  <div class="schema-group-toggle" data-group="' + groupKey + '" data-toggle-id="' + itemsId + '">';
+                    html += '    <span class="arrow">▶</span>';
+                    html += '    <strong>' + groupKey + ' (<span class="item-count">' + items.length + '</span>)</strong>';
+                    html += '  </div>';
+                    html += '  <div class="schema-items" id="' + itemsId + '">';
+                    
+                    for (const item of items) {
+                        const type = item.type === 'TABLE' ? 'table' : 'view';
+                        const icon = item.type === 'TABLE' ? '📋' : '👁️';
+                        const nameUpper = item.name.toUpperCase();
+                        html += '    <div class="schema-item ' + type + '" data-name="' + nameUpper + '" title="' + item.name + ' (' + (item.columns ? item.columns.length : 0) + ' columns)">';
+                        html += '      <span class="schema-item-icon">' + icon + '</span>';
+                        html += '      <span class="schema-item-name">' + item.name + '</span>';
+                        html += '    </div>';
+                    }
+                    
+                    html += '  </div>';
+                    html += '</div>';
+                }
+
+                if (!html) {
+                    schemaContent.innerHTML = '<div class="schema-loading">Nessuna tabella trovata</div>';
+                    return;
+                }
+
+                schemaContent.innerHTML = html;
+
+                // Attach toggle events
+                document.querySelectorAll('.schema-group-toggle').forEach(toggle => {
+                    toggle.addEventListener('click', function() {
+                        const itemsId = this.getAttribute('data-toggle-id');
+                        const itemsDiv = document.getElementById(itemsId);
+                        if (itemsDiv) {
+                            itemsDiv.classList.toggle('collapsed');
+                            this.classList.toggle('collapsed');
+                        }
+                    });
+                });
+
+                // Attach schema item click events
+                document.querySelectorAll('.schema-item').forEach(item => {
+                    item.addEventListener('click', function() {
+                        const name = this.querySelector('.schema-item-name').textContent.trim();
+                        // Insert table/view name into editor
+                        const cursorPos = sqlEditor.selectionStart;
+                        const before = sqlEditor.value.substring(0, cursorPos);
+                        const after = sqlEditor.value.substring(cursorPos);
+                        sqlEditor.value = before + name + after;
+                        sqlEditor.selectionStart = cursorPos + name.length;
+                        sqlEditor.selectionEnd = cursorPos + name.length;
+                        sqlEditor.focus();
+                        updateLineNumbers();
+                    });
+                });
+
+                // Attach filter events
+                setupSchemaFilter();
+            })
+            .catch(err => {
+                schemaContent.innerHTML = '<div class="schema-error">Errore di connessione: ' + err.message + '</div>';
+            });
+    }
+
+    function setupSchemaFilter() {
+        schemaFilter.addEventListener('input', function() {
+            const filterText = this.value.trim().toUpperCase();
+            
+            document.querySelectorAll('.schema-group').forEach(group => {
+                const items = group.querySelectorAll('.schema-item');
+                let visibleCount = 0;
+                let totalCount = items.length;
+                
+                items.forEach(item => {
+                    const name = item.getAttribute('data-name') || '';
+                    const isMatch = filterText === '' || name.includes(filterText);
+                    
+                    if (isMatch) {
+                        item.classList.remove('hidden');
+                        visibleCount++;
+                    } else {
+                        item.classList.add('hidden');
+                    }
+                });
+                
+                // Update group header
+                const toggle = group.querySelector('.schema-group-toggle');
+                const countSpan = toggle.querySelector('.item-count');
+                countSpan.textContent = visibleCount;
+                
+                // Show/hide group based on visible items
+                if (visibleCount === 0) {
+                    group.classList.add('hidden');
+                } else {
+                    group.classList.remove('hidden');
+                }
+            });
+        });
+    }
+
+    // Load schema on page load
+    loadSchemaObjects();
 
 })();
 

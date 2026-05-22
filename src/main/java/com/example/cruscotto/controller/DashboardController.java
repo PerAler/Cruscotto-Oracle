@@ -2,6 +2,7 @@ package com.example.cruscotto.controller;
 
 import com.example.cruscotto.service.ExecutionLogService;
 import com.example.cruscotto.service.OracleProcedureExecutorService;
+import com.example.cruscotto.service.OracleSchemaService;
 import com.example.cruscotto.service.QueryOutputHtmlService;
 import com.example.cruscotto.service.ScheduledExecutionService;
 import com.example.cruscotto.service.SqlProcedureCatalogService;
@@ -48,6 +49,7 @@ public class DashboardController {
 
     private final SqlProcedureCatalogService catalogService;
     private final OracleProcedureExecutorService executorService;
+    private final OracleSchemaService oracleSchemaService;
     private final ScheduledExecutionService scheduledExecutionService;
     private final ExecutionLogService executionLogService;
     private final QueryOutputHtmlService queryOutputHtmlService;
@@ -59,6 +61,7 @@ public class DashboardController {
 
     public DashboardController(SqlProcedureCatalogService catalogService,
                                OracleProcedureExecutorService executorService,
+                               OracleSchemaService oracleSchemaService,
                                ScheduledExecutionService scheduledExecutionService,
                                ExecutionLogService executionLogService,
                                QueryOutputHtmlService queryOutputHtmlService,
@@ -67,6 +70,7 @@ public class DashboardController {
                                @Value("${app.default-application:ALER}") String defaultApplication) {
         this.catalogService = catalogService;
         this.executorService = executorService;
+        this.oracleSchemaService = oracleSchemaService;
         this.scheduledExecutionService = scheduledExecutionService;
         this.executionLogService = executionLogService;
         this.queryOutputHtmlService = queryOutputHtmlService;
@@ -730,5 +734,19 @@ public class DashboardController {
             builder.queryParam("error", error);
         }
         return "redirect:" + builder.build().encode().toUriString();
+    }
+
+    @GetMapping(value = "/api/schema", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public Map<String, Object> getSchemaObjects() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        try {
+            result.put("ok", true);
+            result.put("schema", oracleSchemaService.getGroupedSchemaObjects());
+        } catch (Exception ex) {
+            result.put("ok", false);
+            result.put("error", ex.getMessage());
+        }
+        return result;
     }
 }

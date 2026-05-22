@@ -4,6 +4,21 @@ Applicazione web Spring Boot 3 per la gestione, esecuzione e monitoraggio di scr
 
 ---
 
+## Changelog
+
+### v1.0.5 (2026-05-22)
+- **[NEW] Schema Browser Sidebar nell'Editor SQL** — Pannello laterale collassabile che mostra tabelle e viste dello schema corrente
+  - Visualizzazione gerarchica: raggruppamento per TABLES e VIEWS
+  - Filtro di ricerca real-time con matching case-insensitive
+  - Scroll interno per ogni gruppo (max-height 200px) per visualizzare tutti gli oggetti
+  - Click su tabella/vista inserisce il nome nel punto di cursore dell'editor
+  - Scrollbar custom e responsive design per mobile
+  - Contatore dinamico aggiornato in base ai filtri applicati
+- **[NEW] Endpoint REST `/api/schema`** — Recupera tabelle e viste da `user_tables` e `user_views` di Oracle
+- **[NEW] OracleSchemaService** — Servizio per interrogazione schema Oracle con grouping automatico
+
+---
+
 ## Funzionalità
 
 ### Dashboard principale (`/dashboard`)
