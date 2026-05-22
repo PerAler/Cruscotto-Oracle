@@ -341,16 +341,12 @@
         .schema-groups-container {
             flex: 1;
             overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
+            display: block;
         }
 
         .schema-group {
-            margin-bottom: 0;
-            display: flex;
-            flex-direction: column;
-            min-height: 0;
+            margin-bottom: 0.5rem;
+            display: block;
         }
 
         .schema-group-toggle {
@@ -391,12 +387,20 @@
             flex-direction: column;
             gap: 0.2rem;
             padding: 0.3rem 0 0.3rem 1rem;
-            max-height: 200px;
+            --schema-row-height: 1.95rem;
+            min-height: 0;
+            max-height: calc(var(--schema-row-height) * 20);
             overflow-y: auto;
             transition: all 0.2s;
             opacity: 1;
-            flex-shrink: 1;
-            min-height: 0;
+            border-left: 2px solid #dbeafe;
+            margin-top: 0.2rem;
+        }
+
+        .schema-items.loading {
+            min-height: calc(var(--schema-row-height) * 1);
+            max-height: calc(var(--schema-row-height) * 1);
+            overflow-y: hidden;
         }
 
         .schema-items::-webkit-scrollbar {
@@ -467,6 +471,10 @@
 
         .schema-item.view .schema-item-icon {
             color: #3b82f6;
+        }
+
+        .schema-item.other .schema-item-icon {
+            color: #0f766e;
         }
 
         .schema-item-name {
@@ -671,18 +679,30 @@
     <!-- ── Layout con sidebar ─────────────────────────────────────────────── -->
     <div class="editor-with-sidebar">
 
-        <!-- Schema sidebar (tables & views) -->
+        <!-- Schema sidebar (all schema objects) -->
         <aside class="schema-sidebar" id="schemaSidebar">
             <div class="schema-header">
                 <span class="schema-header-icon">⬚</span>
-                Schema
+                Oggetti schema
             </div>
             <div class="schema-content">
                 <div class="schema-search">
-                    <input type="text" id="schemaFilter" placeholder="🔍 Cerca tabella/vista..." spellcheck="false">
+                    <input type="text" id="schemaFilter" placeholder="🔍 Cerca oggetti schema..." spellcheck="false">
                 </div>
                 <div class="schema-groups-container" id="schemaContent">
-                    <div class="schema-loading">Caricamento...</div>
+                    <th:block th:if="${schemaGroups != null and !schemaGroups.isEmpty()}">
+                        <div class="schema-group" th:each="groupEntry : ${schemaGroups}" th:attr="data-group-key=${groupEntry.key}">
+                            <div class="schema-group-toggle collapsed"
+                                 th:attr="data-group=${groupEntry.key},data-toggle-id=${groupEntry.domId},data-loaded='false'">
+                                <span class="arrow">▶</span>
+                                <strong th:text="${groupEntry.key + ' (' + groupEntry.itemCount + ')'}">GROUP (0)</strong>
+                            </div>
+                            <div class="schema-items collapsed" th:id="${groupEntry.domId}" th:attr="data-loaded='false'">
+                                <div class="schema-loading">Premi per caricare</div>
+                            </div>
+                        </div>
+                    </th:block>
+                    <div class="schema-loading" th:if="${schemaGroups == null or schemaGroups.isEmpty()}">Caricamento...</div>
                 </div>
             </div>
         </aside>
@@ -1518,91 +1538,140 @@
         document.getElementById('updateSelectedScript').value = '';
     }
 
-    // ── Schema sidebar (load tables & views) ──────────────────────────────────────
+    // ── Schema sidebar (load all schema objects) ─────────────────────────────────
     const schemaFilter = document.getElementById('schemaFilter');
-    
-    function loadSchemaObjects() {
-        const schemaContent = document.getElementById('schemaContent');
-        fetch('/api/schema')
-            .then(r => r.json())
-            .then(data => {
-                if (!data.ok) {
-                    schemaContent.innerHTML = '<div class="schema-error">Errore: ' + (data.error || 'Unknown error') + '</div>';
+
+    function schemaItemsId(groupKey) {
+        return 'schema-items-' + groupKey.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    }
+
+    function schemaItemClass(type) {
+        return (type === 'TABLE' || type === 'VIEW') ? type.toLowerCase() : 'other';
+    }
+
+    function schemaItemIcon(type) {
+        switch ((type || '').toUpperCase()) {
+            case 'TABLE': return '📋';
+            case 'VIEW': return '👁️';
+            case 'PROCEDURE': return '⚙️';
+            case 'FUNCTION': return 'ƒ';
+            case 'PACKAGE': return '📦';
+            case 'PACKAGE BODY': return '🧩';
+            case 'TRIGGER': return '⚡';
+            case 'SEQUENCE': return '#';
+            case 'SYNONYM': return '🔗';
+            case 'TYPE': return '🔷';
+            case 'TYPE BODY': return '🔹';
+            case 'MATERIALIZED VIEW': return '🪟';
+            case 'MATERIALIZED VIEW LOG': return '🧾';
+            default: return '⌁';
+        }
+    }
+
+    function renderSchemaItem(item) {
+        const type = schemaItemClass(item.type);
+        const icon = schemaItemIcon(item.type);
+        const name = item.name || '';
+        const columns = Array.isArray(item.columns) ? item.columns.length : 0;
+        return '<div class="schema-item ' + type + '" data-name="' + escapeHtml(name.toUpperCase()) + '" title="' + escapeHtml(name) + ' (' + columns + ' columns)">' +
+            '<span class="schema-item-icon">' + icon + '</span>' +
+            '<span class="schema-item-name">' + escapeHtml(name) + '</span>' +
+            '</div>';
+    }
+
+    function renderSchemaItems(items) {
+        if (!items || !items.length) {
+            return '<div class="schema-loading">Nessun oggetto trovato</div>';
+        }
+        return items.map(renderSchemaItem).join('');
+    }
+
+    async function loadSchemaGroup(toggle) {
+        const groupKey = toggle.getAttribute('data-group');
+        const itemsId = toggle.getAttribute('data-toggle-id');
+        const itemsDiv = document.getElementById(itemsId);
+        if (!groupKey || !itemsDiv || itemsDiv.dataset.loaded === 'true' || itemsDiv.dataset.loading === 'true') {
+            return itemsDiv;
+        }
+
+        toggle.dataset.loading = 'true';
+        itemsDiv.dataset.loading = 'true';
+        itemsDiv.classList.add('loading');
+        itemsDiv.innerHTML = '<div class="schema-loading">Reading...</div>';
+
+        try {
+            const response = await fetch('/api/schema/group?group=' + encodeURIComponent(groupKey));
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
+            const data = await response.json();
+            if (!data.ok) {
+                throw new Error(data.error || 'Errore sconosciuto');
+            }
+
+            const items = data.items || [];
+            itemsDiv.classList.remove('loading');
+            itemsDiv.innerHTML = renderSchemaItems(items);
+            itemsDiv.dataset.loaded = 'true';
+            toggle.dataset.loaded = 'true';
+            wireSchemaItems(itemsDiv);
+        } catch (err) {
+            itemsDiv.classList.remove('loading');
+            itemsDiv.innerHTML = '<div class="schema-error">Errore di caricamento: ' + escapeHtml(err.message) + '</div>';
+            itemsDiv.dataset.loaded = 'false';
+            toggle.dataset.loaded = 'false';
+        } finally {
+            delete toggle.dataset.loading;
+            delete itemsDiv.dataset.loading;
+        }
+
+        return itemsDiv;
+    }
+
+    function wireSchemaSidebar() {
+        document.querySelectorAll('.schema-group-toggle').forEach(toggle => {
+            toggle.addEventListener('click', function() {
+                const itemsId = this.getAttribute('data-toggle-id');
+                const itemsDiv = document.getElementById(itemsId);
+                if (!itemsDiv) return;
+                const willOpen = itemsDiv.classList.contains('collapsed');
+                if (willOpen && itemsDiv.dataset.loaded !== 'true') {
+                    itemsDiv.classList.remove('collapsed');
+                    this.classList.remove('collapsed');
+                    loadSchemaGroup(this);
                     return;
                 }
-
-                const schema = data.schema || {};
-                let html = '';
-
-                for (const groupKey of Object.keys(schema)) {
-                    const items = schema[groupKey] || [];
-                    if (items.length === 0) continue;
-
-                    const groupId = 'schema-group-' + groupKey.toLowerCase();
-                    const itemsId = 'schema-items-' + groupKey.toLowerCase();
-                    
-                    html += '<div class="schema-group" data-group-key="' + groupKey + '">';
-                    html += '  <div class="schema-group-toggle" data-group="' + groupKey + '" data-toggle-id="' + itemsId + '">';
-                    html += '    <span class="arrow">▶</span>';
-                    html += '    <strong>' + groupKey + ' (<span class="item-count">' + items.length + '</span>)</strong>';
-                    html += '  </div>';
-                    html += '  <div class="schema-items" id="' + itemsId + '">';
-                    
-                    for (const item of items) {
-                        const type = item.type === 'TABLE' ? 'table' : 'view';
-                        const icon = item.type === 'TABLE' ? '📋' : '👁️';
-                        const nameUpper = item.name.toUpperCase();
-                        html += '    <div class="schema-item ' + type + '" data-name="' + nameUpper + '" title="' + item.name + ' (' + (item.columns ? item.columns.length : 0) + ' columns)">';
-                        html += '      <span class="schema-item-icon">' + icon + '</span>';
-                        html += '      <span class="schema-item-name">' + item.name + '</span>';
-                        html += '    </div>';
-                    }
-                    
-                    html += '  </div>';
-                    html += '</div>';
-                }
-
-                if (!html) {
-                    schemaContent.innerHTML = '<div class="schema-loading">Nessuna tabella trovata</div>';
-                    return;
-                }
-
-                schemaContent.innerHTML = html;
-
-                // Attach toggle events
-                document.querySelectorAll('.schema-group-toggle').forEach(toggle => {
-                    toggle.addEventListener('click', function() {
-                        const itemsId = this.getAttribute('data-toggle-id');
-                        const itemsDiv = document.getElementById(itemsId);
-                        if (itemsDiv) {
-                            itemsDiv.classList.toggle('collapsed');
-                            this.classList.toggle('collapsed');
-                        }
-                    });
-                });
-
-                // Attach schema item click events
-                document.querySelectorAll('.schema-item').forEach(item => {
-                    item.addEventListener('click', function() {
-                        const name = this.querySelector('.schema-item-name').textContent.trim();
-                        // Insert table/view name into editor
-                        const cursorPos = sqlEditor.selectionStart;
-                        const before = sqlEditor.value.substring(0, cursorPos);
-                        const after = sqlEditor.value.substring(cursorPos);
-                        sqlEditor.value = before + name + after;
-                        sqlEditor.selectionStart = cursorPos + name.length;
-                        sqlEditor.selectionEnd = cursorPos + name.length;
-                        sqlEditor.focus();
-                        updateLineNumbers();
-                    });
-                });
-
-                // Attach filter events
-                setupSchemaFilter();
-            })
-            .catch(err => {
-                schemaContent.innerHTML = '<div class="schema-error">Errore di connessione: ' + err.message + '</div>';
+                itemsDiv.classList.toggle('collapsed');
+                this.classList.toggle('collapsed');
             });
+        });
+
+        wireSchemaItems(document);
+        setupSchemaFilter();
+    }
+
+    function loadSchemaObjects() {
+        wireSchemaSidebar();
+    }
+
+    function wireSchemaItems(root) {
+        root.querySelectorAll('.schema-item').forEach(item => {
+            if (item.dataset.wired === 'true') {
+                return;
+            }
+            item.dataset.wired = 'true';
+            item.addEventListener('click', function() {
+                const name = this.querySelector('.schema-item-name').textContent.trim();
+                const cursorPos = sqlEditor.selectionStart;
+                const before = sqlEditor.value.substring(0, cursorPos);
+                const after = sqlEditor.value.substring(cursorPos);
+                sqlEditor.value = before + name + after;
+                sqlEditor.selectionStart = cursorPos + name.length;
+                sqlEditor.selectionEnd = cursorPos + name.length;
+                sqlEditor.focus();
+                updateLineNumbers();
+            });
+        });
     }
 
     function setupSchemaFilter() {
@@ -1612,7 +1681,7 @@
             document.querySelectorAll('.schema-group').forEach(group => {
                 const items = group.querySelectorAll('.schema-item');
                 let visibleCount = 0;
-                let totalCount = items.length;
+                const groupLabel = (group.getAttribute('data-group-key') || '').toUpperCase();
                 
                 items.forEach(item => {
                     const name = item.getAttribute('data-name') || '';
@@ -1625,17 +1694,15 @@
                         item.classList.add('hidden');
                     }
                 });
-                
-                // Update group header
+
                 const toggle = group.querySelector('.schema-group-toggle');
-                const countSpan = toggle.querySelector('.item-count');
-                countSpan.textContent = visibleCount;
-                
-                // Show/hide group based on visible items
-                if (visibleCount === 0) {
-                    group.classList.add('hidden');
-                } else {
-                    group.classList.remove('hidden');
+                const itemsDiv = group.querySelector('.schema-items');
+                const loaded = itemsDiv && itemsDiv.dataset.loaded === 'true';
+                const headerMatch = filterText === '' || groupLabel.includes(filterText);
+                const shouldShow = filterText === '' ? true : (visibleCount > 0 || headerMatch || !loaded);
+                group.classList.toggle('hidden', !shouldShow);
+                if (loaded) {
+                    toggle.querySelector('.item-count').textContent = items.length;
                 }
             });
         });

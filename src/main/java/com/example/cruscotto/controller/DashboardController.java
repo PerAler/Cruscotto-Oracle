@@ -47,7 +47,7 @@ public class DashboardController {
                                   String oracleCauseSection) {
     }
 
-    private static final String APP_VERSION = "1.0.5";
+    private static final String APP_VERSION = "1.0.6";
 
     private final SqlProcedureCatalogService catalogService;
     private final OracleProcedureExecutorService executorService;
@@ -643,10 +643,12 @@ public class DashboardController {
         boolean dbConnected = isDatabaseConnected();
         List<com.example.cruscotto.model.ExecutionLogEntry> latestLogs = executionLogService.latest();
         String robotState = resolveRobotState(dbConnected, error, latestLogs);
+        List<com.example.cruscotto.model.SchemaGroupSummary> schemaGroups = oracleSchemaService.getSchemaGroupSummaries();
 
         model.addAttribute("allProcedures", allProcedures);
         model.addAttribute("selectedScript", effectiveSelection);
         model.addAttribute("sqlContent", sqlContent);
+        model.addAttribute("schemaGroups", schemaGroups);
         model.addAttribute("successMessage", msg);
         model.addAttribute("errorMessage", error);
         model.addAttribute("robotState", robotState);
@@ -746,7 +748,22 @@ public class DashboardController {
         Map<String, Object> result = new LinkedHashMap<>();
         try {
             result.put("ok", true);
-            result.put("schema", oracleSchemaService.getGroupedSchemaObjects());
+            result.put("schemaGroups", oracleSchemaService.getSchemaGroupSummaries());
+        } catch (Exception ex) {
+            result.put("ok", false);
+            result.put("error", ex.getMessage());
+        }
+        return result;
+    }
+
+    @GetMapping(value = "/api/schema/group", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public Map<String, Object> getSchemaGroup(@RequestParam("group") String group) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        try {
+            result.put("ok", true);
+            result.put("group", group);
+            result.put("items", oracleSchemaService.getSchemaObjectsForGroup(group));
         } catch (Exception ex) {
             result.put("ok", false);
             result.put("error", ex.getMessage());

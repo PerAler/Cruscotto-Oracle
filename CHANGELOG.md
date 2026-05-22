@@ -3,6 +3,18 @@
 Tutte le modifiche rilevanti a questo progetto sono documentate in questo file.
 
 ## [1.0.5] - 2026-05-22
+## [1.0.6] - 2026-05-22
+### Added
+- Sidebar schema lazy-load: tutti i gruppi Oracle visibili all'avvio in stato collassato, con caricamento elenco solo su apertura gruppo.
+- Endpoint REST `/api/schema/group` per caricare on-demand gli oggetti di un gruppo specifico.
+- Supporto esteso ai gruppi Oracle oltre TABLES/VIEWS (procedure, function, package, trigger, sequence, synonym, type, materialized view, altri oggetti).
+
+### Changed
+- Layout sidebar schema: gruppi non-flex, `schema-items` come sotto-pannello scrollabile verticale.
+- Regole altezza `schema-items`: minimo 0, massimo 20 righe.
+- Feedback caricamento gruppo: apertura immediata con riga singola `Reading...` durante il fetch.
+
+## [1.0.5] - 2026-05-22
 ### Added
 - **Schema Browser Sidebar nell'Editor SQL** — Pannello laterale collassabile che visualizza tabelle e viste dello schema Oracle corrente
 - **Filtro di ricerca real-time** — Ricerca case-insensitive con contatore dinamico aggiornato in base ai risultati
