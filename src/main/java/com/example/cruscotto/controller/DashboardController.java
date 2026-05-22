@@ -47,6 +47,8 @@ public class DashboardController {
                                   String oracleCauseSection) {
     }
 
+    private static final String APP_VERSION = "1.0.5";
+
     private final SqlProcedureCatalogService catalogService;
     private final OracleProcedureExecutorService executorService;
     private final OracleSchemaService oracleSchemaService;
@@ -135,6 +137,7 @@ public class DashboardController {
         model.addAttribute("defaultApplication", defaultApplication);
         model.addAttribute("runtimePid", runtimePid);
         model.addAttribute("runtimeStartedAt", runtimeStartedAt);
+        model.addAttribute("appVersion", APP_VERSION);
         return "dashboard";
     }
 
@@ -649,6 +652,7 @@ public class DashboardController {
         model.addAttribute("robotState", robotState);
         model.addAttribute("runtimePid", runtimePid);
         model.addAttribute("runtimeStartedAt", runtimeStartedAt);
+        model.addAttribute("appVersion", APP_VERSION);
         return "editor";
     }
 
@@ -748,5 +752,24 @@ public class DashboardController {
             result.put("error", ex.getMessage());
         }
         return result;
+    }
+
+    @GetMapping("/readme")
+    public String readmePage() {
+        return "redirect:/api/readme";
+    }
+
+    @GetMapping(value = "/api/readme", produces = MediaType.TEXT_MARKDOWN_VALUE)
+    @ResponseBody
+    public String getReadme() {
+        try {
+            Path readmePath = Path.of("README.md");
+            if (Files.exists(readmePath)) {
+                return Files.readString(readmePath);
+            }
+        } catch (Exception ex) {
+            // fallback
+        }
+        return "# README non trovato";
     }
 }

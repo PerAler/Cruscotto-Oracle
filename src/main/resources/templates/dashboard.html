@@ -259,6 +259,13 @@
         Istanza PID <strong th:text="${runtimePid}"></strong>
         avviata alle
         <strong th:text="${#temporals.format(runtimeStartedAt, 'dd/MM/yyyy HH:mm:ss')}"></strong>
+        · v<strong th:text="${appVersion}"></strong>
+        · <a href="/api/readme" target="_blank" rel="noopener" 
+             style="color:rgba(255,255,255,0.8);text-decoration:none;font-size:0.85rem;transition:all 0.2s;border-radius:3px;padding:0.2rem 0.4rem"
+             onmouseover="this.style.background='rgba(255,255,255,0.12)';this.style.color='rgba(255,255,255,1)'"
+             onmouseout="this.style.background='transparent';this.style.color='rgba(255,255,255,0.8)'">
+             📖 README
+          </a>
     </p>
 </header>
 

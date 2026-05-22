@@ -16,6 +16,8 @@ Applicazione web Spring Boot 3 per la gestione, esecuzione e monitoraggio di scr
   - Contatore dinamico aggiornato in base ai filtri applicati
 - **[NEW] Endpoint REST `/api/schema`** — Recupera tabelle e viste da `user_tables` e `user_views` di Oracle
 - **[NEW] OracleSchemaService** — Servizio per interrogazione schema Oracle con grouping automatico
+- **[NEW] Version footer + README button** — Numero versione e link discreto al README nel footer della pagina editor
+- **[NEW] Endpoint `/api/readme`** — Serve il file README.md come markdown nel browser
 
 ---
 

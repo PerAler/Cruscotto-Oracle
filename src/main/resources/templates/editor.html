@@ -1664,5 +1664,16 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+
+<!-- Footer con versione e README -->
+<footer style="text-align:center;padding:1rem;margin-top:2rem;font-size:0.8rem;color:#999;border-top:1px solid #ddd;background:rgba(255,255,255,0.5)">
+    v<strong th:text="${appVersion}"></strong> · <a href="/api/readme" target="_blank" rel="noopener" 
+       style="color:#0891a6;text-decoration:none;font-weight:600;transition:all 0.2s"
+       onmouseover="this.style.textDecoration='underline';this.style.color='#0369a1'"
+       onmouseout="this.style.textDecoration='none';this.style.color='#0891a6'">
+       📖 README
+    </a>
+</footer>
+
 </body>
 </html>
