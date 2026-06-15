@@ -15,22 +15,22 @@ import java.util.List;
 public class ExecutionLogService {
 
     private final int maxSize;
-    private final ExecutionLogOracleStore oracleStore;
+    private final ExecutionLogFileStore fileStore;
     private final Deque<ExecutionLogEntry> logBuffer = new ArrayDeque<>();
 
     public ExecutionLogService(@Value("${app.logs.max-size:100}") int maxSize,
-                               ExecutionLogOracleStore oracleStore) {
+                               ExecutionLogFileStore fileStore) {
         this.maxSize = maxSize;
-        this.oracleStore = oracleStore;
+        this.fileStore = fileStore;
     }
 
     @PostConstruct
     public synchronized void warmupFromPersistentStore() {
-        oracleStore.trimToMaxRows(maxSize);
-        List<ExecutionLogEntry> persisted = oracleStore.loadLatest(maxSize);
+        fileStore.trimToMaxRows(maxSize);
+        List<ExecutionLogEntry> persisted = fileStore.loadLatest(maxSize);
         logBuffer.clear();
         for (ExecutionLogEntry entry : persisted) {
-            // I record arrivano dal DB dal più recente al meno recente.
+            // I record arrivano dallo store file dal più recente al meno recente.
             logBuffer.addLast(entry);
         }
     }
@@ -40,8 +40,8 @@ public class ExecutionLogService {
         while (logBuffer.size() > maxSize) {
             logBuffer.removeLast();
         }
-        oracleStore.persist(entry);
-        oracleStore.trimToMaxRows(maxSize);
+        fileStore.persist(entry);
+        fileStore.trimToMaxRows(maxSize);
     }
 
     public synchronized List<ExecutionLogEntry> latest() {
@@ -50,7 +50,7 @@ public class ExecutionLogService {
 
     public synchronized void clearErrorsForProcedure(String procedureName) {
         logBuffer.removeIf(e -> "KO".equals(e.status()) && procedureName.equals(e.procedureName()));
-        oracleStore.deleteErrorsForProcedure(procedureName);
+        fileStore.deleteErrorsForProcedure(procedureName);
     }
 
     public synchronized boolean deleteErrorAtIndex(int errorIndex) {
@@ -68,7 +68,7 @@ public class ExecutionLogService {
 
             if (currentErrorIndex == errorIndex) {
                 iterator.remove();
-                oracleStore.deleteOne(entry);
+                fileStore.deleteOne(entry);
                 return true;
             }
             currentErrorIndex++;
@@ -88,7 +88,7 @@ public class ExecutionLogService {
             }
         }
 
-        oracleStore.deleteAllErrors();
+        fileStore.deleteAllErrors();
         return removedInMemory;
     }
 }
