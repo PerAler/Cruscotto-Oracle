@@ -39,4 +39,17 @@ class SqlProcedureCatalogServiceTests {
         assertEquals("My_Script", updatedName);
         assertTrue(Files.readString(tempDir.resolve("My_Script.sql")).contains("SELECT 2 FROM dual"));
     }
+
+    @Test
+    void saveAndLoadByConnectionLabelUsesDedicatedSubfolder() throws Exception {
+        SqlProcedureCatalogService service = new SqlProcedureCatalogService(tempDir.toString());
+
+        String savedName = service.saveSqlFile("PROD ALER", "Query Conn", "SELECT 42 FROM dual", false);
+        assertEquals("Query_Conn", savedName);
+        assertTrue(Files.exists(tempDir.resolve("PROD_ALER").resolve("Query_Conn.sql")));
+
+        assertTrue(service.findByName("PROD ALER", "Query_Conn").isPresent());
+        assertTrue(service.findAll("PROD ALER").stream().anyMatch(p -> "Query_Conn".equals(p.name())));
+        assertTrue(service.findAll("ALTRO").isEmpty());
+    }
 }

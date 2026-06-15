@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Import XLSX — Cruscotto Oracle</title>
+    <link rel="icon" type="image/svg+xml" href="/icon.svg">
     <link rel="stylesheet" th:href="@{/dashboard.css(v=${#temporals.format(#temporals.createNow(), 'yyyyMMddHHmmss')})}">
     <style>
         .import-grid {
@@ -71,10 +72,13 @@
 </head>
 <body>
 <header class="hero">
-    <h1>Import XLSX in Oracle</h1>
+    <div style="display:flex;align-items:center;gap:0.9rem;justify-content:center;flex-wrap:wrap">
+        <img src="/icon.svg" alt="Robot" width="44" height="44" style="flex-shrink:0">
+        <h1 style="margin:0">Import XLSX in Oracle</h1>
+    </div>
     <p>Carica un file, proponi i campi, scegli le colonne e crea/importa la tabella.</p>
     <div style="margin-top:1rem">
-        <a href="/dashboard" class="output-link secondary-link">← Torna al cruscotto</a>
+        <a href="/utility" class="output-link secondary-link">← Torna a utility</a>
     </div>
 </header>
 

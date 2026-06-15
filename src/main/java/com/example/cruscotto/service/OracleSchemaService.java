@@ -2,7 +2,6 @@ package com.example.cruscotto.service;
 
 import com.example.cruscotto.model.SchemaObject;
 import com.example.cruscotto.model.SchemaGroupSummary;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,21 +52,37 @@ public class OracleSchemaService {
             "SCHEDULE"
     );
 
-    private final NamedParameterJdbcTemplate namedParameterJdbcTemplate;
+    private final OracleConnectionManager connectionManager;
 
-    public OracleSchemaService(NamedParameterJdbcTemplate namedParameterJdbcTemplate) {
-        this.namedParameterJdbcTemplate = namedParameterJdbcTemplate;
+    public OracleSchemaService(OracleConnectionManager connectionManager) {
+        this.connectionManager = connectionManager;
     }
 
     public List<SchemaGroupSummary> getSchemaGroupSummaries() {
+        return getSchemaGroupSummaries(null);
+    }
+
+    public List<SchemaGroupSummary> getSchemaGroupSummaries(String connectionId) {
         try {
-            String query = """
+            OracleConnectionManager.ResolvedConnection resolved = connectionManager.resolveConnection(connectionId);
+            String owner = resolved.info().schema();
+            String query = owner == null
+                    ? """
                     SELECT object_type, COUNT(*) AS object_count
                     FROM user_objects
                     GROUP BY object_type
                     ORDER BY object_type
+                    """
+                    : """
+                    SELECT object_type, COUNT(*) AS object_count
+                    FROM all_objects
+                    WHERE owner = :owner
+                    GROUP BY object_type
+                    ORDER BY object_type
                     """;
-            List<Map<String, Object>> rows = namedParameterJdbcTemplate.getJdbcTemplate().queryForList(query);
+            List<Map<String, Object>> rows = owner == null
+                    ? resolved.template().getJdbcTemplate().queryForList(query)
+                    : resolved.template().queryForList(query, Map.of("owner", owner));
             Map<String, Integer> counts = new LinkedHashMap<>();
             for (Map<String, Object> row : rows) {
                 String objectType = Objects.toString(row.get("OBJECT_TYPE"), "").trim();
@@ -94,47 +109,67 @@ public class OracleSchemaService {
     }
 
     public List<SchemaObject> getSchemaObjectsForGroup(String groupKey) {
+        return getSchemaObjectsForGroup(null, groupKey);
+    }
+
+    public List<SchemaObject> getSchemaObjectsForGroup(String connectionId, String groupKey) {
         String normalizedGroup = normalizeGroupKey(groupKey);
         if (normalizedGroup.isBlank()) {
             return List.of();
         }
 
         try {
+            OracleConnectionManager.ResolvedConnection resolved = connectionManager.resolveConnection(connectionId);
             if ("OTHER OBJECTS".equals(normalizedGroup)) {
-                return loadOtherObjects();
+                return loadOtherObjects(resolved);
             }
             String objectType = toObjectType(normalizedGroup);
             if (objectType == null) {
                 return List.of();
             }
-            return loadObjectsByType(objectType);
+            return loadObjectsByType(resolved, objectType);
         } catch (Exception ex) {
             log.error("Error fetching schema objects for group {}", groupKey, ex);
             return List.of();
         }
     }
 
-    private List<SchemaObject> loadObjectsByType(String objectType) {
-        String query = """
+    private List<SchemaObject> loadObjectsByType(OracleConnectionManager.ResolvedConnection resolved, String objectType) {
+        String owner = resolved.info().schema();
+        String query = owner == null
+                ? """
                 SELECT object_name
                 FROM user_objects
                 WHERE object_type = :objectType
                 ORDER BY object_name
+                """
+                : """
+                SELECT object_name
+                FROM all_objects
+                WHERE owner = :owner
+                  AND object_type = :objectType
+                ORDER BY object_name
                 """;
-        Map<String, Object> params = Map.of("objectType", objectType);
-        List<String> names = namedParameterJdbcTemplate.queryForList(query, params, String.class);
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("objectType", objectType);
+        if (owner != null) {
+            params.put("owner", owner);
+        }
+        List<String> names = resolved.template().queryForList(query, params, String.class);
         List<SchemaObject> result = new ArrayList<>();
         for (String name : names) {
             List<String> columns = ("TABLE".equals(objectType) || "VIEW".equals(objectType))
-                    ? getTableColumns(name)
+                    ? getTableColumns(resolved, name)
                     : List.of();
             result.add(new SchemaObject(name, objectType, columns));
         }
         return result;
     }
 
-    private List<SchemaObject> loadOtherObjects() {
-        String query = """
+    private List<SchemaObject> loadOtherObjects(OracleConnectionManager.ResolvedConnection resolved) {
+        String owner = resolved.info().schema();
+        String query = owner == null
+                ? """
                 SELECT object_name, object_type
                 FROM user_objects
                 WHERE object_type NOT IN (
@@ -144,8 +179,22 @@ public class OracleSchemaService {
                     'LIBRARY', 'JOB', 'SCHEDULE'
                 )
                 ORDER BY object_type, object_name
+                """
+                : """
+                SELECT object_name, object_type
+                FROM all_objects
+                WHERE owner = :owner
+                  AND object_type NOT IN (
+                    'TABLE', 'VIEW', 'PROCEDURE', 'FUNCTION', 'PACKAGE', 'PACKAGE BODY',
+                    'TRIGGER', 'SEQUENCE', 'SYNONYM', 'TYPE', 'TYPE BODY',
+                    'MATERIALIZED VIEW', 'MATERIALIZED VIEW LOG', 'JAVA SOURCE',
+                    'LIBRARY', 'JOB', 'SCHEDULE'
+                )
+                ORDER BY object_type, object_name
                 """;
-        List<Map<String, Object>> rows = namedParameterJdbcTemplate.getJdbcTemplate().queryForList(query);
+        List<Map<String, Object>> rows = owner == null
+                ? resolved.template().getJdbcTemplate().queryForList(query)
+                : resolved.template().queryForList(query, Map.of("owner", owner));
         List<SchemaObject> result = new ArrayList<>();
         for (Map<String, Object> row : rows) {
             String objectName = Objects.toString(row.get("OBJECT_NAME"), "").trim();
@@ -158,11 +207,22 @@ public class OracleSchemaService {
         return result;
     }
 
-    private List<String> getTableColumns(String tableName) {
+    private List<String> getTableColumns(OracleConnectionManager.ResolvedConnection resolved, String tableName) {
+        String owner = resolved.info().schema();
         try {
-            String query = "SELECT column_name FROM user_tab_columns WHERE table_name = ? ORDER BY column_id";
-            return namedParameterJdbcTemplate.getJdbcTemplate()
-                    .queryForList(query, String.class, tableName);
+            if (owner == null) {
+                String query = "SELECT column_name FROM user_tab_columns WHERE table_name = ? ORDER BY column_id";
+                return resolved.template().getJdbcTemplate().queryForList(query, String.class, tableName);
+            }
+            String query = """
+                    SELECT column_name
+                    FROM all_tab_columns
+                    WHERE owner = :owner
+                      AND table_name = :tableName
+                    ORDER BY column_id
+                    """;
+            Map<String, Object> params = Map.of("owner", owner, "tableName", tableName);
+            return resolved.template().queryForList(query, params, String.class);
         } catch (Exception ex) {
             log.warn("Error fetching columns for {}: {}", tableName, ex.getMessage());
             return new ArrayList<>();

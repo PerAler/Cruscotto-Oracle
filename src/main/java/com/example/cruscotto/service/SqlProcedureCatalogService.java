@@ -58,6 +58,17 @@ public class SqlProcedureCatalogService {
     }
 
     public List<ProcedureDefinition> findAll() {
+        return findAll(null);
+    }
+
+    public List<ProcedureDefinition> findAll(String connectionLabel) {
+        if (connectionLabel != null && !connectionLabel.isBlank()) {
+            return loadNamespaceProcedures(connectionLabel).values().stream()
+                    .sorted(Comparator.comparingLong(ProcedureDefinition::lastModifiedEpochMs)
+                            .reversed()
+                            .thenComparing(ProcedureDefinition::name))
+                    .toList();
+        }
         return procedures.values().stream()
                 .sorted(Comparator.comparingLong(ProcedureDefinition::lastModifiedEpochMs)
                         .reversed()
@@ -66,10 +77,21 @@ public class SqlProcedureCatalogService {
     }
 
     public Optional<ProcedureDefinition> findByName(String name) {
+        return findByName(null, name);
+    }
+
+    public Optional<ProcedureDefinition> findByName(String connectionLabel, String name) {
+        if (connectionLabel != null && !connectionLabel.isBlank()) {
+            return Optional.ofNullable(loadNamespaceProcedures(connectionLabel).get(name));
+        }
         return Optional.ofNullable(procedures.get(name));
     }
 
     public synchronized String saveSqlFile(String requestedName, String sqlText, boolean overwrite) {
+        return saveSqlFile(null, requestedName, sqlText, overwrite);
+    }
+
+    public synchronized String saveSqlFile(String connectionLabel, String requestedName, String sqlText, boolean overwrite) {
         String normalizedSql = sqlText == null ? "" : sqlText.trim();
         if (normalizedSql.isBlank()) {
             throw new IllegalArgumentException("SQL vuoto: impossibile salvare il file");
@@ -80,13 +102,14 @@ public class SqlProcedureCatalogService {
             throw new IllegalArgumentException("Nome file non valido");
         }
 
-        Path sqlFile = sqlDir.resolve(baseName + ".sql").normalize();
-        if (!sqlFile.startsWith(sqlDir)) {
+        Path targetDir = resolveTargetSqlDir(connectionLabel);
+        Path sqlFile = targetDir.resolve(baseName + ".sql").normalize();
+        if (!sqlFile.startsWith(targetDir)) {
             throw new IllegalArgumentException("Percorso file non valido");
         }
 
         try {
-            Files.createDirectories(sqlDir);
+            Files.createDirectories(targetDir);
             if (Files.exists(sqlFile) && !overwrite) {
                 throw new IllegalArgumentException("Esiste già uno script con nome '" + baseName + "'");
             }
@@ -101,6 +124,10 @@ public class SqlProcedureCatalogService {
     }
 
     public synchronized String updateSqlFile(String existingName, String sqlText) {
+        return updateSqlFile(null, existingName, sqlText);
+    }
+
+    public synchronized String updateSqlFile(String connectionLabel, String existingName, String sqlText) {
         String normalizedSql = sqlText == null ? "" : sqlText.trim();
         if (normalizedSql.isBlank()) {
             throw new IllegalArgumentException("SQL vuoto: impossibile salvare il file");
@@ -111,15 +138,19 @@ public class SqlProcedureCatalogService {
         }
 
         try {
-            String resolvedName = procedures.containsKey(existingName)
+            Map<String, ProcedureDefinition> source = (connectionLabel == null || connectionLabel.isBlank())
+                    ? procedures
+                    : loadNamespaceProcedures(connectionLabel);
+            String resolvedName = source.containsKey(existingName)
                     ? existingName
                     : normalizeBaseName(existingName);
             if (resolvedName.isBlank()) {
                 throw new IllegalArgumentException("Seleziona uno script valido da aggiornare");
             }
 
-            Path sqlFile = sqlDir.resolve(resolvedName + ".sql").normalize();
-            if (!sqlFile.startsWith(sqlDir)) {
+            Path targetDir = resolveTargetSqlDir(connectionLabel);
+            Path sqlFile = targetDir.resolve(resolvedName + ".sql").normalize();
+            if (!sqlFile.startsWith(targetDir)) {
                 throw new IllegalArgumentException("Percorso file non valido");
             }
 
@@ -130,6 +161,12 @@ public class SqlProcedureCatalogService {
             return resolvedName;
         } catch (IOException ex) {
             throw new IllegalStateException("Errore durante il salvataggio del file SQL: " + ex.getMessage(), ex);
+        }
+    }
+
+    public synchronized void reloadProcedures(String connectionLabel) {
+        if (connectionLabel == null || connectionLabel.isBlank()) {
+            reloadProcedures();
         }
     }
 
@@ -160,6 +197,29 @@ public class SqlProcedureCatalogService {
         }
     }
 
+    private Map<String, ProcedureDefinition> loadNamespaceProcedures(String connectionLabel) {
+        Path namespaceDir = resolveTargetSqlDir(connectionLabel);
+        Map<String, ProcedureDefinition> namespaceProcedures = new LinkedHashMap<>();
+        if (!Files.exists(namespaceDir)) {
+            return namespaceProcedures;
+        }
+        try (Stream<Path> paths = Files.walk(namespaceDir)) {
+            paths.filter(Files::isRegularFile)
+                    .filter(path -> path.getFileName().toString().toLowerCase().endsWith(".sql"))
+                    .sorted()
+                    .forEach(path -> {
+                        try {
+                            registerFile(path, namespaceDir, namespaceProcedures);
+                        } catch (IOException ex) {
+                            throw new IllegalStateException("Errore nel caricamento del file SQL: " + path, ex);
+                        }
+                    });
+        } catch (IOException ex) {
+            throw new IllegalStateException("Errore nel caricamento dei file SQL namespace '" + connectionLabel + "'", ex);
+        }
+        return namespaceProcedures;
+    }
+
     private void registerResource(Resource resource) throws IOException {
         String filename = resource.getFilename();
         if (filename == null || filename.isBlank()) {
@@ -183,15 +243,19 @@ public class SqlProcedureCatalogService {
     }
 
     private void registerFile(Path file) throws IOException {
+        registerFile(file, sqlDir, procedures);
+    }
+
+    private void registerFile(Path file, Path baseDir, Map<String, ProcedureDefinition> targetMap) throws IOException {
         String filename = file.getFileName().toString();
         String sqlText = Files.readString(file, StandardCharsets.UTF_8);
         String name = filename.replaceFirst("\\.sql$", "");
         List<String> parameterNames = extractParameterNames(sqlText);
         Map<String, String> parameterDescriptions = extractParameterDescriptions(sqlText);
         long lastModifiedEpochMs = Files.getLastModifiedTime(file).toMillis();
-        String relativePath = sqlDir.relativize(file).toString().replace('\\', '/');
+        String relativePath = baseDir.relativize(file).toString().replace('\\', '/');
 
-        procedures.put(name, new ProcedureDefinition(
+        targetMap.put(name, new ProcedureDefinition(
                 name,
                 "file:" + relativePath,
                 sqlText,
@@ -199,6 +263,21 @@ public class SqlProcedureCatalogService {
                 parameterDescriptions,
                 lastModifiedEpochMs
         ));
+    }
+
+    private Path resolveTargetSqlDir(String connectionLabel) {
+        if (connectionLabel == null || connectionLabel.isBlank()) {
+            return sqlDir;
+        }
+        String folderName = normalizeBaseName(connectionLabel);
+        if (folderName.isBlank()) {
+            throw new IllegalArgumentException("Etichetta connessione non valida");
+        }
+        Path targetDir = sqlDir.resolve(folderName).normalize();
+        if (!targetDir.startsWith(sqlDir)) {
+            throw new IllegalArgumentException("Percorso cartella SQL non valido");
+        }
+        return targetDir;
     }
 
     private String normalizeBaseName(String requestedName) {

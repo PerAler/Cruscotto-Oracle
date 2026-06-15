@@ -5,7 +5,6 @@ import com.example.cruscotto.model.ProcedureDefinition;
 import org.springframework.jdbc.core.ColumnMapRowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterUtils;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.namedparam.ParsedSql;
 import org.springframework.jdbc.datasource.DataSourceUtils;
 import org.springframework.stereotype.Service;
@@ -34,34 +33,43 @@ public class OracleProcedureExecutorService {
     private static final Logger log = LoggerFactory.getLogger(OracleProcedureExecutorService.class);
 
     private final SqlProcedureCatalogService catalogService;
-    private final NamedParameterJdbcTemplate namedParameterJdbcTemplate;
+    private final OracleConnectionManager connectionManager;
     private final ExecutionLogService executionLogService;
     private final QueryOutputHtmlService queryOutputHtmlService;
 
     public OracleProcedureExecutorService(SqlProcedureCatalogService catalogService,
-                                         NamedParameterJdbcTemplate namedParameterJdbcTemplate,
+                                         OracleConnectionManager connectionManager,
                                          ExecutionLogService executionLogService,
                                          QueryOutputHtmlService queryOutputHtmlService) {
         this.catalogService = catalogService;
-        this.namedParameterJdbcTemplate = namedParameterJdbcTemplate;
+        this.connectionManager = connectionManager;
         this.executionLogService = executionLogService;
         this.queryOutputHtmlService = queryOutputHtmlService;
     }
 
     public String runProcedure(String procedureName, Map<String, Object> inputParameters) {
+        return runProcedure(null, procedureName, inputParameters);
+    }
+
+    public String runProcedure(String connectionId, String procedureName, Map<String, Object> inputParameters) {
         ProcedureDefinition definition = catalogService.findByName(procedureName)
                 .orElseThrow(() -> new IllegalArgumentException("Procedura non trovata: " + procedureName));
-        return runSql(procedureName, definition.sqlText(), inputParameters, false);
+        return runSql(connectionId, procedureName, definition.sqlText(), inputParameters, false);
     }
 
     public String runAdhocSelect(String queryLabel, String sqlText, Map<String, Object> inputParameters) {
-        String effectiveLabel = (queryLabel == null || queryLabel.isBlank()) ? "SQL Editor" : queryLabel.trim();
-        return runSql(effectiveLabel, sqlText, inputParameters, true);
+        return runAdhocSelect(null, queryLabel, sqlText, inputParameters);
     }
 
-    private String runSql(String executionName, String sqlText, Map<String, Object> inputParameters, boolean selectOnly) {
+    public String runAdhocSelect(String connectionId, String queryLabel, String sqlText, Map<String, Object> inputParameters) {
+        String effectiveLabel = (queryLabel == null || queryLabel.isBlank()) ? "SQL Editor" : queryLabel.trim();
+        return runSql(connectionId, effectiveLabel, sqlText, inputParameters, true);
+    }
+
+    private String runSql(String connectionId, String executionName, String sqlText, Map<String, Object> inputParameters, boolean selectOnly) {
         long start = System.currentTimeMillis();
         Map<String, Object> safeParameters = new LinkedHashMap<>(inputParameters == null ? Map.of() : inputParameters);
+        OracleConnectionManager.ResolvedConnection resolvedConnection = connectionManager.resolveConnection(connectionId);
 
         String executableSql;
         try {
@@ -86,12 +94,17 @@ public class OracleProcedureExecutorService {
         String jdbcSql = NamedParameterUtils.substituteNamedParameters(parsedSql, source);
         Object[] values = NamedParameterUtils.buildValueArray(parsedSql, source, null);
 
-        DataSource dataSource = namedParameterJdbcTemplate.getJdbcTemplate().getDataSource();
+        DataSource dataSource = resolvedConnection.dataSource();
         Connection conn = DataSourceUtils.getConnection(dataSource);
         String outputHtmlFile = null;
         String dbmsOutput = null;
 
         try {
+            String schema = resolvedConnection.info().schema();
+            if (schema != null && !schema.isBlank()) {
+                connectionManager.applyCurrentSchema(conn, schema);
+            }
+
             // Abilita DBMS_OUTPUT sulla stessa connessione che eseguirà lo script
             try (CallableStatement cs = conn.prepareCall("BEGIN DBMS_OUTPUT.ENABLE(NULL); END;")) {
                 cs.execute();
@@ -260,4 +273,3 @@ public class OracleProcedureExecutorService {
         return sw.toString();
     }
 }
-

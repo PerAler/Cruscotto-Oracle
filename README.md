@@ -6,23 +6,30 @@ Applicazione web Spring Boot 3 per la gestione, esecuzione e monitoraggio di scr
 
 ## Changelog
 
-### v1.0.6 (2026-05-22)
-- **[NEW] Sidebar schema lazy-load nell'Editor SQL**
-  - Tutti i gruppi Oracle visibili subito e collassati di default
-  - Caricamento on-demand del contenuto gruppo solo in apertura
-  - Feedback immediato con riga `Reading...` durante il fetch
-- **[NEW] Endpoint REST `/api/schema/group`** — Carica gli oggetti di uno specifico gruppo schema
-- **[CHANGED] Layout schema sidebar**
-  - `schema-group` non-flex
-  - `schema-items` come sotto-pannello con scroll verticale
-  - Altezza `schema-items`: minimo 0, massimo 20 righe
-- **[CHANGED] Raggruppamento schema esteso** — Inclusi anche gruppi Oracle oltre TABLES/VIEWS
+### v1.2.0 (2026-06-15)
+- **[NEW] Profili connessione persistenti lato server**
+  - La combo connessioni recupera i profili anche dopo riavvio applicazione
+  - Nessuna password salvata: solo etichetta, target, username, schema
+- **[NEW] Libreria query per etichetta connessione**
+  - Salvataggio/aggiornamento script in cartella dedicata `sql/<ETICHETTA>`
+  - Caricamento script filtrato per etichetta attiva
+- **[CHANGED] Cruscotto allineato alla connessione attiva**
+  - Evidenza etichetta connessione in pagina
+  - Combo script coerente con etichetta/contesto attivo
+
+### v1.1.0 (2026-06-15)
+- **[NEW] Multi-connessione Oracle nell'Editor SQL**
+  - Apertura/chiusura di più connessioni runtime senza riavvio
+  - Attivazione della connessione corrente tramite tab
+  - Schema browser e `editor/execute` legati alla connessione attiva
+- **[NEW] API connessioni** — `/api/connections`, `/api/connections/open`, `/api/connections/activate`, `/api/connections/close`
+- **[CHANGED] Avvio applicazione** — bootstrap disconnesso (nessuna richiesta URL/user/password all'avvio)
 
 ---
 
 ## Funzionalità
 
-### Dashboard principale (`/dashboard`)
+### Utility (`/utility`)
 - **Catalogo script SQL** — carica automaticamente tutti i file `.sql` presenti nella cartella configurata (`app.sql.folder`, default `sql`); filtro per nome in tempo reale.
 - **Editor SQL rapido** — textarea con:
   - Syntax highlighting PL/SQL via Prism.js
@@ -34,13 +41,13 @@ Applicazione web Spring Boot 3 per la gestione, esecuzione e monitoraggio di scr
 - **Salvataggio script** — salva nuovi file `.sql` nel catalogo oppure aggiorna script esistenti
 - **Parametri bind** — inserimento nome=valore, uno per riga
 - **Robot animato** nell'header con stato dinamico: `ok` / `script-error` / `db-offline`
-- **KPI dashboard** — card cliccabili: Log totali, Esecuzioni OK, Errori attivi, Output generati
+- **KPI utility** — card cliccabili: Log totali, Esecuzioni OK, Errori attivi, Output generati
 - **Schedulazioni cron** — pianificazione esecuzioni con espressione Spring cron a 6 campi; lancio singolo one-shot con data/ora locale
 
 ### Editor SQL dedicato (`/editor`)
 - **Editor full-page** con numerazione righe sincronizzata
-- **Formattatore PL/SQL** — identico alla dashboard (pulsante nell'action bar)
-- **Robot animato** nell'header con stato dinamico (stesso robot della dashboard)
+- **Formattatore PL/SQL** — identico alla utility (pulsante nell'action bar)
+- **Robot animato** nell'header con stato dinamico (stesso robot della utility)
 - Autocompletamento keyword SQL (Tab / frecce / Escape)
 - Selezione script dal catalogo (caricamento AJAX, senza reload pagina)
 - Ricarica catalogo da disco senza riavvio
@@ -48,12 +55,14 @@ Applicazione web Spring Boot 3 per la gestione, esecuzione e monitoraggio di scr
 - **Vista risultati** con toggle densità (compatta / estesa) e toggle larghezza colonne
 - **Salva nuovo** / **Aggiorna script selezionato** (POST form)
 - Estrazione automatica parametri bind
+- KPI log/errori in testa pagina
+- Header aggiornato in tempo reale dopo apertura/attivazione connessione (stato DB e label attiva)
 
 ### Output (`/output/*`)
 - Ogni esecuzione con risultati salva **un solo file CSV** nella cartella `output/`
 - **HTML** — generato on-demand dal CSV al momento della visualizzazione; paginato (200 righe per pagina, max 1000)
 - **XLSX** — generato on-demand dal CSV al momento del download; colonne auto-dimensionate, troncatura celle a 32.767 caratteri
-- I link HTML/CSV/XLSX nella dashboard puntano tutti allo stesso bundle base (stesso timestamp); solo il CSV è persistito su disco
+- I link HTML/CSV/XLSX nella utility puntano tutti allo stesso bundle base (stesso timestamp); solo il CSV è persistito su disco
 - Retention: massimo 100 bundle CSV (`app.output.max-items`); i file più vecchi vengono rimossi automaticamente ad ogni nuova esecuzione
 
 ### Log e monitoraggio
@@ -66,15 +75,20 @@ Applicazione web Spring Boot 3 per la gestione, esecuzione e monitoraggio di scr
 ### API / Endpoint utili
 | Endpoint | Metodo | Descrizione |
 |---|---|---|
-| `/dashboard` | GET | Pagina principale |
+| `/dashboard` | GET | Redirect rapido all'editor |
+| `/utility` | GET | Pagina utility (catalogo script, scheduler, import) |
 | `/editor` | GET | Editor SQL dedicato |
-| `/query/execute` | POST | Esegui script dal cruscotto |
+| `/query/execute` | POST | Esegui script dalla utility |
 | `/query/save` | POST | Salva nuovo script |
 | `/query/update` | POST | Aggiorna script esistente |
 | `/editor/execute` | POST | Esegui query (AJAX, ritorna JSON) |
 | `/editor/save` | POST | Salva script dall'editor |
 | `/editor/update` | POST | Aggiorna script dall'editor |
 | `/editor/load-script` | GET | Carica script (AJAX, ritorna JSON) |
+| `/api/connections` | GET | Elenco connessioni Oracle aperte |
+| `/api/connections/open` | POST | Apre una nuova connessione Oracle |
+| `/api/connections/activate` | POST | Imposta la connessione attiva |
+| `/api/connections/close` | POST | Chiude una connessione Oracle |
 | `/catalog/reload` | POST | Ricarica catalogo da disco |
 | `/xlsx-import` | GET | Pagina importazione XLSX |
 | `/xlsx-import/analyze` | POST | Analizza file XLSX caricato |
@@ -98,21 +112,19 @@ Applicazione web Spring Boot 3 per la gestione, esecuzione e monitoraggio di scr
 
 ```properties
 server.port=8090
-spring.datasource.url=jdbc:oracle:thin:@//HOST:1521/SERVICE_NAME
-spring.datasource.username=utente
-spring.datasource.password=password
+spring.datasource.url=jdbc:h2:mem:cruscotto;MODE=Oracle;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+spring.datasource.username=sa
+spring.datasource.password=
 
 app.output.folder=output
 app.output.max-items=100
 app.logs.max-size=500
-app.logs.persist.enabled=true
+app.logs.persist.enabled=false
 spring.servlet.multipart.max-file-size=25MB
 spring.servlet.multipart.max-request-size=25MB
 ```
 
-In avvio da console, l'app chiede URL, username e password JDBC prima del bootstrap Spring e poi apre automaticamente il browser sulla dashboard. I valori inseriti vengono salvati in `config/cruscotto-oracle-local.properties` e ricaricati al prossimo avvio.
-
-Quando parte, il terminale mostra tre richieste in ordine: `URL JDBC`, `Username JDBC`, `Password JDBC`. Inserisci il valore e premi `INVIO`; se vuoi mantenere quello già impostato, premi solo `INVIO`.
+L'app parte senza connessioni Oracle preconfigurate. Le connessioni si aprono dalla pagina `/editor` nel pannello "Connessioni e schema".
 
 Per il DBMS spool, se vuoi usarlo su Oracle 11g crea anche la tabella temporanea:
 
@@ -134,7 +146,7 @@ SELECT * FROM fatture WHERE anno = :anno AND stato = :stato
 ```bash
 cd C:\Temp\Cruscotto_Oracle
 mvn clean package -DskipTests
-java -jar target\cruscotto-oracle-1.0.4.war
+java -jar target\cruscotto-oracle-1.2.0.war
 ```
 Apri `http://localhost:8090`.
 
@@ -148,6 +160,6 @@ Apri `http://localhost:8090`.
 Le schedulazioni sono in memoria e vengono azzerate al riavvio.
 
 ## Note tecniche
-- Log in memoria (buffer FIFO); con `app.logs.persist.enabled=true` vengono persistiti su Oracle e ricaricati all'avvio.
+- Log in memoria (buffer FIFO); la persistenza Oracle è disabilitata di default (`app.logs.persist.enabled=false`).
 - Schedulazioni in memoria: azzerate al riavvio.
 - Il WAR è deployabile su Tomcat esterno oppure avviabile come fat-JAR.

@@ -1,11 +1,13 @@
 package com.example.cruscotto.service;
 
+import com.example.cruscotto.model.OracleConnectionInfo;
 import com.example.cruscotto.model.SchemaObject;
 import com.example.cruscotto.model.SchemaGroupSummary;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -21,9 +23,25 @@ class OracleSchemaServiceTests {
 
     @Test
     void returnsGroupSummariesAndLoadsSingleGroupOnDemand() {
+        OracleConnectionManager connectionManager = mock(OracleConnectionManager.class);
         NamedParameterJdbcTemplate namedParameterJdbcTemplate = mock(NamedParameterJdbcTemplate.class);
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         when(namedParameterJdbcTemplate.getJdbcTemplate()).thenReturn(jdbcTemplate);
+        OracleConnectionInfo info = new OracleConnectionInfo(
+                "conn-1",
+                "local",
+                "dbserver:1521:ORCL",
+                "jdbc:oracle:thin:@//host:1521/service",
+                "user",
+                null,
+                Instant.now()
+        );
+        OracleConnectionManager.ResolvedConnection resolved = new OracleConnectionManager.ResolvedConnection(
+                info,
+                null,
+                namedParameterJdbcTemplate
+        );
+        when(connectionManager.resolveConnection(null)).thenReturn(resolved);
 
         when(jdbcTemplate.queryForList(contains("GROUP BY object_type")))
                 .thenReturn(List.of(
@@ -43,7 +61,7 @@ class OracleSchemaServiceTests {
                     };
                 });
 
-        OracleSchemaService service = new OracleSchemaService(namedParameterJdbcTemplate);
+        OracleSchemaService service = new OracleSchemaService(connectionManager);
 
         List<SchemaGroupSummary> summaries = service.getSchemaGroupSummaries();
         assertEquals("TABLES", summaries.get(0).key());

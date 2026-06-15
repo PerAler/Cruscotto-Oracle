@@ -2,6 +2,29 @@
 
 Tutte le modifiche rilevanti a questo progetto sono documentate in questo file.
 
+## [1.2.0] - 2026-06-15
+### Added
+- Persistenza profili connessione Oracle su file locale (`config/cruscotto-oracle-connections.json`) senza password.
+- API connessioni estesa con `savedProfiles` per popolare la combo anche dopo riavvio.
+- Catalogo SQL per etichetta connessione con cartelle dedicate (`sql/<ETICHETTA>`).
+
+### Changed
+- Editor: caricamento/salvataggio/aggiornamento script allineati alla connessione attiva.
+- Dashboard: visualizzazione etichetta connessione attiva e selezione script filtrata per etichetta.
+- Navigazione aggiornata: `/dashboard` come ingresso editor e nuova pagina utility su `/utility`.
+- Editor allineato alla utility con KPI log/errori in testa e header dinamico aggiornato dopo apertura connessione.
+
+## [1.1.0] - 2026-06-15
+### Added
+- Gestione multi-connessione Oracle nell'Editor SQL (apertura, attivazione e chiusura connessioni runtime).
+- API dedicate: `/api/connections`, `/api/connections/open`, `/api/connections/activate`, `/api/connections/close`.
+- Supporto esecuzione query e caricamento schema per connessione selezionata (`connectionId`).
+
+### Changed
+- Avvio applicazione in stato disconnesso (nessun prompt JDBC in console).
+- Sidebar editor aggiornata con gestione connessioni e schema per sessione.
+- `OracleSchemaService` esteso per lavorare su `USER_*` oppure `ALL_*` in base allo schema configurato.
+
 ## [1.0.5] - 2026-05-22
 ## [1.0.6] - 2026-05-22
 ### Added

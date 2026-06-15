@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Editor SQL — Cruscotto Oracle</title>
+    <link rel="icon" type="image/svg+xml" href="/icon.svg">
     <link rel="stylesheet" th:href="@{/dashboard.css}">
     <style>
         /* ── Layout pagina editor ────────────────────────────────────────── */
@@ -263,7 +264,7 @@
         /* ── Schema sidebar panel ────────────────────────────────────────────── */
         .schema-sidebar {
             width: 280px;
-            max-height: 520px;
+            max-height: 620px;
             border: 1px solid var(--line);
             border-radius: 8px;
             background: linear-gradient(135deg, #f8fbfd 0%, #f0f7fb 100%);
@@ -309,6 +310,59 @@
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
+        }
+
+        .connection-panel {
+            border: 1px solid #cde2ee;
+            border-radius: 6px;
+            background: #fff;
+            padding: 0.5rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        .connection-panel input {
+            width: 100%;
+            padding: 0.35rem 0.5rem;
+            border: 1px solid #bcd6e6;
+            border-radius: 4px;
+            font-size: 0.72rem;
+        }
+
+        .connection-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+        }
+
+        .connection-tab {
+            border: 1px solid #b8d8e8;
+            background: #eef7fc;
+            color: #0d4f67;
+            border-radius: 14px;
+            padding: 0.2rem 0.55rem;
+            font-size: 0.7rem;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .connection-tab.active {
+            background: #0ea5c6;
+            border-color: #0e91af;
+            color: #fff;
+        }
+
+        .connection-tab .close-btn {
+            border: none;
+            background: transparent;
+            color: inherit;
+            cursor: pointer;
+            padding: 0;
+            font-size: 0.75rem;
+            line-height: 1;
         }
 
         .schema-search {
@@ -567,6 +621,18 @@
         @keyframes title-sheen {
             0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; }
         }
+        @keyframes title-float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-1px); }
+        }
+        @keyframes subtitle-breathe {
+            0%, 100% { opacity: 0.88; transform: translateY(0); }
+            50% { opacity: 1; transform: translateY(-1px); }
+        }
+        @keyframes runtime-glow {
+            0%, 100% { box-shadow: 0 0 0 rgba(103, 232, 249, 0.0); border-color: rgba(255,255,255,0.14); }
+            50% { box-shadow: 0 0 18px rgba(103, 232, 249, 0.12); border-color: rgba(255,255,255,0.26); }
+        }
         @keyframes hero-enter-soft {
             0% { opacity: 0; transform: translateY(12px); } 100% { opacity: 1; transform: translateY(0); }
         }
@@ -621,6 +687,99 @@
         }
         .robot-status-label.state-script-error { background: rgba(225,29,72,0.18); color: #ffe4e6; }
         .robot-status-label.state-db-offline   { background: rgba(71,85,105,0.22); color: #e2e8f0; }
+        .hero-title {
+            margin: 0;
+            background-image: linear-gradient(90deg, #ecfeff 0%, #67e8f9 35%, #f59e0b 50%, #67e8f9 65%, #ecfeff 100%);
+            background-size: 220% 100%;
+            color: transparent;
+            -webkit-background-clip: text;
+            background-clip: text;
+            animation: hero-enter-soft 0.65s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both,
+                       title-sheen 6s ease-in-out 0.8s infinite,
+                       title-float 2.8s ease-in-out 0.8s infinite;
+            will-change: background-position, transform, text-shadow;
+        }
+        .hero-title.state-script-error {
+            background-image: linear-gradient(90deg, #ffe4e6 0%, #fb7185 40%, #e11d48 55%, #fb7185 70%, #fff1f2 100%);
+        }
+        .hero-title.state-db-offline {
+            background-image: linear-gradient(90deg, #e2e8f0 0%, #94a3b8 40%, #475569 55%, #94a3b8 70%, #f8fafc 100%);
+        }
+        .hero-subtitle {
+            margin: 0.15rem 0 0;
+            color: rgba(236, 254, 255, 0.9);
+            animation: hero-enter-soft 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.22s both,
+                       subtitle-breathe 4s ease-in-out 0.95s infinite;
+        }
+        .hero-subtitle.state-script-error {
+            color: #ffe4e6;
+        }
+        .hero-subtitle.state-db-offline {
+            color: #e2e8f0;
+        }
+        .hero-runtime {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            margin-top: 0.7rem;
+            padding: 0.45rem 0.8rem;
+            border: 1px solid rgba(255,255,255,0.14);
+            border-radius: 999px;
+            background: rgba(4, 26, 32, 0.14);
+            color: #ecfeff;
+            animation: hero-enter-soft 0.75s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both,
+                       runtime-glow 5s ease-in-out 1.05s infinite;
+            backdrop-filter: blur(4px);
+        }
+        .hero-runtime.state-script-error {
+            color: #fff1f2;
+            background: rgba(127, 29, 29, 0.14);
+            box-shadow: 0 0 18px rgba(225, 29, 72, 0.12);
+        }
+        .hero-runtime.state-db-offline {
+            color: #f8fafc;
+            background: rgba(30, 41, 59, 0.18);
+            box-shadow: 0 0 18px rgba(71, 85, 105, 0.12);
+        }
+        .hero-runtime strong {
+            color: inherit;
+        }
+        .hero-copy {
+            animation: hero-enter-soft 0.6s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 0.75rem;
+            margin-bottom: 0.9rem;
+        }
+        .stat-card {
+            border-radius: 12px;
+            border: 1px solid #d6deeb;
+            padding: 0.9rem;
+            background: #fff;
+            text-decoration: none;
+            color: inherit;
+            box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
+        }
+        .stat-link:hover {
+            border-color: #9dc6f8;
+            box-shadow: 0 6px 18px rgba(37, 99, 235, 0.12);
+        }
+        .stat-label {
+            margin: 0;
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: #5b6575;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+        }
+        .stat-value {
+            margin: 0.35rem 0 0;
+            font-size: 1.35rem;
+            font-weight: 800;
+            color: #0f172a;
+        }
     </style>
 </head>
 <body>
@@ -629,7 +788,7 @@
 
 <header class="hero">
     <div style="display:flex;align-items:center;gap:1rem;margin-bottom:0.5rem">
-        <svg width="64" height="64" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"
+        <svg width="78" height="78" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"
              style="flex-shrink:0"
              class="robot-icon"
              th:classappend="' state-' + ${robotState}">
@@ -658,8 +817,8 @@
             <path d="M38 74 Q28 86 36 98" class="spark"/>
             <path d="M160 60 Q176 76 164 92" class="spark" style="animation-delay:0.45s"/>
         </svg>
-        <div style="animation: hero-enter-soft 0.6s cubic-bezier(0.22,1,0.36,1) 0.1s both">
-            <h1 style="margin:0">Editor SQL</h1>
+        <div class="hero-copy">
+            <h1 class="hero-title" th:classappend="' state-' + ${robotState}">Cruscotto Oracle</h1>
             <span class="robot-status-label"
                   th:classappend="' state-' + ${robotState}"
                   th:text="${robotState == 'db-offline' ? 'Robot offline: DB KO' : (robotState == 'script-error' ? 'Robot in allarme: script KO' : 'Robot operativo: DB OK')}">
@@ -667,7 +826,22 @@
             </span>
         </div>
     </div>
-    <p style="margin:0.15rem 0 0;color:rgba(236,254,255,0.9)">Componi, esegui e salva query SELECT direttamente su Oracle.</p>
+    <p class="hero-subtitle" th:classappend="' state-' + ${robotState}">
+        Esegui script SQL da file, passa parametri e pianifica job con cron.
+        · Connessione attiva: <strong id="headerActiveConnectionLabel" th:text="${activeConnectionLabel != null and !activeConnectionLabel.isBlank() ? activeConnectionLabel : 'Nessuna'}">Nessuna</strong>
+    </p>
+    <p class="hero-runtime" th:classappend="' state-' + ${robotState}">
+        Istanza PID <strong th:text="${runtimePid}"></strong>
+        avviata alle
+        <strong th:text="${#temporals.format(runtimeStartedAt, 'dd/MM/yyyy HH:mm:ss')}"></strong>
+        · v<strong th:text="${appVersion}"></strong>
+        · <a href="/api/readme" target="_blank" rel="noopener"
+             style="color:rgba(255,255,255,0.8);text-decoration:none;font-size:0.85rem;transition:all 0.2s;border-radius:3px;padding:0.2rem 0.4rem"
+             onmouseover="this.style.background='rgba(255,255,255,0.12)';this.style.color='rgba(255,255,255,1)'"
+             onmouseout="this.style.background='transparent';this.style.color='rgba(255,255,255,0.8)'">
+            📖 README
+        </a>
+    </p>
 </header>
 
 <main class="editor-layout">
@@ -676,6 +850,25 @@
     <div th:if="${successMessage != null}" class="msg-bar ok" th:text="${successMessage}"></div>
     <div th:if="${errorMessage != null}"  class="msg-bar ko" th:text="${errorMessage}"></div>
 
+    <section class="stats-grid">
+        <a href="/logs" target="_blank" rel="noopener" class="stat-card stat-link" title="Apri finestra Log totali">
+            <p class="stat-label">Log totali</p>
+            <p class="stat-value" th:text="${logs.size()}">0</p>
+        </a>
+        <a href="/logs?status=OK" target="_blank" rel="noopener" class="stat-card stat-link" title="Apri finestra Log OK">
+            <p class="stat-label">Esecuzioni OK</p>
+            <p class="stat-value" th:text="${okCount}">0</p>
+        </a>
+        <a href="/errors" target="_blank" rel="noopener" class="stat-card stat-link" title="Apri finestra Errori attivi">
+            <p class="stat-label">Errori attivi</p>
+            <p class="stat-value" th:text="${errorCount}">0</p>
+        </a>
+        <article class="stat-card">
+            <p class="stat-label">Output disponibili</p>
+            <p class="stat-value" th:text="${outputCount}">0</p>
+        </article>
+    </section>
+
     <!-- ── Layout con sidebar ─────────────────────────────────────────────── -->
     <div class="editor-with-sidebar">
 
@@ -683,9 +876,23 @@
         <aside class="schema-sidebar" id="schemaSidebar">
             <div class="schema-header">
                 <span class="schema-header-icon">⬚</span>
-                Oggetti schema
+                Connessioni e schema
             </div>
             <div class="schema-content">
+                <input type="hidden" id="activeConnectionId" th:value="${activeConnectionId}">
+                <div class="connection-panel">
+                    <div id="connectionTabs" class="connection-tabs"></div>
+                    <select id="connProfileSelect" title="Profili connessione salvati">
+                        <option value="">Profili connessione salvati</option>
+                    </select>
+                    <input type="text" id="connLabel" placeholder="Etichetta (es. PROD-ALER)">
+                    <div style="font-size:0.7rem;color:#64748b">jdbc:oracle:thin:@</div>
+                    <input type="text" id="connTarget" placeholder="dbserver:porta:sid (oppure URL JDBC completo)">
+                    <input type="text" id="connUsername" placeholder="Username">
+                    <input type="password" id="connPassword" placeholder="Password">
+                    <input type="text" id="connSchema" placeholder="Schema (opzionale)">
+                    <button class="btn btn-run" id="btnOpenConnection" type="button">Apri connessione</button>
+                </div>
                 <div class="schema-search">
                     <input type="text" id="schemaFilter" placeholder="🔍 Cerca oggetti schema..." spellcheck="false">
                 </div>
@@ -718,12 +925,14 @@
                 <span class="script-badge" id="currentScriptBadge"
                       th:text="${selectedScript != null ? selectedScript : '(nuovo)'}"></span>
             </h2>
-            <a href="/dashboard" class="nav-back">← Torna al Cruscotto</a>
+            <a href="/utility" class="nav-back" target="_blank" rel="noopener">↗ Apri Utility</a>
         </div>
 
         <!-- Barra selezione script -->
         <div class="editor-topbar" style="margin-bottom:0.8rem">
-            <label for="scriptSelect" style="font-size:0.82rem;font-weight:600;color:#556">Script:</label>
+            <label for="scriptSelect" style="font-size:0.82rem;font-weight:600;color:#556">
+                Script <span id="scriptLibraryScope" th:text="${activeConnectionLabel != null and !activeConnectionLabel.isBlank() ? '(' + activeConnectionLabel + ')' : '(globale)'}">(globale)</span>:
+            </label>
             <select id="scriptSelect">
                 <option value="">(nessuno — nuovo script)</option>
                 <option th:each="proc : ${allProcedures}"
@@ -784,6 +993,7 @@
                 <input type="hidden" id="saveSqlText" name="sqlText">
                 <input type="hidden" id="saveQueryFileName" name="queryFileName">
                 <input type="hidden" id="saveQueryLabel" name="queryLabel">
+                <input type="hidden" id="saveConnectionId" name="connectionId">
                 <button class="btn btn-save" id="btnSave" type="button">💾 Salva nuovo</button>
             </form>
 
@@ -791,6 +1001,7 @@
             <form id="formUpdate" method="post" action="/editor/update" style="display:inline;margin:0">
                 <input type="hidden" id="updateSqlText" name="sqlText">
                 <input type="hidden" id="updateSelectedScript" name="selectedScript">
+                <input type="hidden" id="updateConnectionId" name="connectionId">
                 <button class="btn btn-upd" id="btnUpdate" type="button"
                         th:disabled="${selectedScript == null}">✏ Aggiorna script</button>
             </form>
@@ -830,6 +1041,7 @@
     const sqlSuggestList  = document.getElementById('sqlSuggestList');
     const lineNumbers     = document.getElementById('lineNumbers');
     const scriptSelect    = document.getElementById('scriptSelect');
+    const scriptLibraryScope = document.getElementById('scriptLibraryScope');
     const currentBadge    = document.getElementById('currentScriptBadge');
     const ajaxMsg         = document.getElementById('ajaxMsg');
     const btnRun          = document.getElementById('btnRun');
@@ -839,6 +1051,7 @@
     const btnSave         = document.getElementById('btnSave');
     const btnUpdate       = document.getElementById('btnUpdate');
     const saveNameInput   = document.getElementById('saveNameInput');
+    const queryLabelInput = document.getElementById('queryLabel');
     const queryParams     = document.getElementById('queryParams');
     const resultPanel     = document.getElementById('resultPanel');
     const resultFrame     = document.getElementById('resultFrame');
@@ -847,6 +1060,23 @@
     const btnCloseResult  = document.getElementById('btnCloseResult');
     const btnToggleDensity = document.getElementById('btnToggleDensity');
     const btnToggleColumnWrap = document.getElementById('btnToggleColumnWrap');
+    const activeConnectionIdInput = document.getElementById('activeConnectionId');
+    const headerActiveConnectionLabel = document.getElementById('headerActiveConnectionLabel');
+    const headerRobotIcon = document.querySelector('header.hero .robot-icon');
+    const headerHeroTitle = document.querySelector('header.hero .hero-title');
+    const headerStatusLabel = document.querySelector('header.hero .robot-status-label');
+    const headerSubtitle = document.querySelector('header.hero .hero-subtitle');
+    const headerRuntime = document.querySelector('header.hero .hero-runtime');
+    const connectionTabs = document.getElementById('connectionTabs');
+    const btnOpenConnection = document.getElementById('btnOpenConnection');
+    const connLabel = document.getElementById('connLabel');
+    const connTarget = document.getElementById('connTarget');
+    const connUsername = document.getElementById('connUsername');
+    const connPassword = document.getElementById('connPassword');
+    const connSchema = document.getElementById('connSchema');
+    const connProfileSelect = document.getElementById('connProfileSelect');
+    const CONNECTION_EDITOR_DRAFTS_KEY = 'cruscotto.connectionEditorDrafts';
+    const DEFAULT_DRAFT_KEY = '__no_connection__';
     const RESULT_DENSITY_KEY = 'cruscotto.result.tableDensity';
     const RESULT_COLUMN_WRAP_KEY = 'cruscotto.result.columnWrap';
     let resultDensity = localStorage.getItem(RESULT_DENSITY_KEY) || 'comfortable';
@@ -865,6 +1095,7 @@
     let suggestItems = [];
     let suggestIndex = -1;
     let suggestContext = null;
+    let savedConnectionProfiles = [];
 
     // ── Numeri di riga ───────────────────────────────────────────────────────
     function updateLineNumbers() {
@@ -1013,6 +1244,7 @@
         updateLineNumbers();
         syncBindParamsFromSql();
         hideSuggestions();
+        saveCurrentConnectionDraft();
         return true;
     }
 
@@ -1031,6 +1263,7 @@
         updateLineNumbers();
         syncBindParamsFromSql();
         refreshSuggestions();
+        saveCurrentConnectionDraft();
     });
     sqlEditor.addEventListener('scroll', () => {
         lineNumbers.scrollTop = sqlEditor.scrollTop;
@@ -1082,6 +1315,7 @@
             updateLineNumbers();
             syncBindParamsFromSql();
             refreshSuggestions();
+            saveCurrentConnectionDraft();
         }
     });
     updateLineNumbers();
@@ -1097,6 +1331,7 @@
         const name = scriptSelect.value;
         if (!name) {
             sqlEditor.value = '';
+            queryLabelInput.value = '';
             currentBadge.textContent = '(nuovo)';
             saveNameInput.value = '';
             btnUpdate.disabled = true;
@@ -1104,9 +1339,10 @@
             updateLineNumbers();
             syncBindParamsFromSql();
             hideMsg();
+            saveCurrentConnectionDraft();
             return;
         }
-        fetch('/editor/load-script?script=' + encodeURIComponent(name))
+        fetch('/editor/load-script?script=' + encodeURIComponent(name) + '&connectionId=' + encodeURIComponent(getActiveConnectionId()))
             .then(r => r.ok ? r.json() : Promise.reject('Errore HTTP ' + r.status))
             .then(data => {
                 sqlEditor.value = data.sqlText || '';
@@ -1118,6 +1354,7 @@
                 // Aggiorna pulsante Update
                 btnUpdate.disabled = false;
                 document.getElementById('updateSelectedScript').value = name;
+                saveCurrentConnectionDraft();
             })
             .catch(err => showMsg('Errore caricamento script: ' + err, false));
     });
@@ -1250,6 +1487,7 @@
                 sqlEditor.value = formatted;
                 updateLineNumbers();
                 sqlEditor.focus();
+                saveCurrentConnectionDraft();
             }
         });
     }
@@ -1273,8 +1511,9 @@
 
         const fd = new FormData();
         fd.append('sqlText',    sql);
-        fd.append('queryLabel', document.getElementById('queryLabel').value);
-        fd.append('queryParams', document.getElementById('queryParams').value);
+        fd.append('queryLabel', queryLabelInput.value);
+        fd.append('queryParams', queryParams.value);
+        fd.append('connectionId', getActiveConnectionId());
 
         try {
             const resp = await fetch('/editor/execute', { method: 'POST', body: fd });
@@ -1310,7 +1549,8 @@
 
         document.getElementById('saveSqlText').value = sql;
         document.getElementById('saveQueryFileName').value = fileName;
-        document.getElementById('saveQueryLabel').value = document.getElementById('queryLabel').value;
+        document.getElementById('saveQueryLabel').value = queryLabelInput.value;
+        document.getElementById('saveConnectionId').value = getActiveConnectionId();
         document.getElementById('formSave').submit();
     });
 
@@ -1324,6 +1564,7 @@
 
         document.getElementById('updateSqlText').value = sql;
         document.getElementById('updateSelectedScript').value = name;
+        document.getElementById('updateConnectionId').value = getActiveConnectionId();
         document.getElementById('formUpdate').submit();
     });
 
@@ -1356,6 +1597,18 @@
             applyResultColumnWrap();
         });
     }
+
+    queryLabelInput.addEventListener('input', () => {
+        saveCurrentConnectionDraft();
+    });
+
+    queryParams.addEventListener('input', () => {
+        saveCurrentConnectionDraft();
+    });
+
+    saveNameInput.addEventListener('input', () => {
+        saveCurrentConnectionDraft();
+    });
 
     // ── Utilità ──────────────────────────────────────────────────────────────
     function updateDensityButtonLabel() {
@@ -1522,6 +1775,72 @@
         document.body.classList.toggle('is-busy', busy);
     }
 
+    function setScriptLibraryScope(connectionLabel) {
+        if (!scriptLibraryScope) {
+            return;
+        }
+        const label = (connectionLabel || '').trim();
+        scriptLibraryScope.textContent = label ? ('(' + label + ')') : '(globale)';
+    }
+
+    function setHeaderActiveConnectionLabel(connectionLabel) {
+        if (!headerActiveConnectionLabel) {
+            return;
+        }
+        const label = (connectionLabel || '').trim();
+        headerActiveConnectionLabel.textContent = label || 'Nessuna';
+    }
+
+    function setHeaderRobotState(state) {
+        const allowedStates = ['ok', 'script-error', 'db-offline'];
+        const effectiveState = allowedStates.includes(state) ? state : 'db-offline';
+        const stateClasses = ['state-ok', 'state-script-error', 'state-db-offline'];
+        [headerRobotIcon, headerHeroTitle, headerStatusLabel, headerSubtitle, headerRuntime].forEach((el) => {
+            if (!el) {
+                return;
+            }
+            stateClasses.forEach((clazz) => el.classList.remove(clazz));
+            el.classList.add('state-' + effectiveState);
+        });
+        if (headerStatusLabel) {
+            headerStatusLabel.textContent = effectiveState === 'ok'
+                ? 'Robot operativo: DB OK'
+                : (effectiveState === 'script-error' ? 'Robot in allarme: script KO' : 'Robot offline: DB KO');
+        }
+    }
+
+    function updateHeaderRobotState(connections, activeConnectionId) {
+        const list = Array.isArray(connections) ? connections : [];
+        const active = list.find((conn) => conn && conn.id === activeConnectionId);
+        const connected = !!(active && active.reachable);
+        setHeaderRobotState(connected ? 'ok' : 'db-offline');
+    }
+
+    function renderScriptSelectOptions(scriptNames) {
+        const names = Array.isArray(scriptNames) ? scriptNames : [];
+        const previousSelection = (scriptSelect.value || '').trim();
+        const options = ['<option value="">(nessuno — nuovo script)</option>'];
+        names.forEach((name) => {
+            const safeName = escapeHtml(name || '');
+            options.push('<option value="' + safeName + '">' + safeName + '</option>');
+        });
+        scriptSelect.innerHTML = options.join('');
+
+        if (previousSelection && names.includes(previousSelection)) {
+            scriptSelect.value = previousSelection;
+            currentBadge.textContent = previousSelection;
+            btnUpdate.disabled = false;
+            document.getElementById('updateSelectedScript').value = previousSelection;
+            saveNameInput.value = previousSelection;
+            return;
+        }
+
+        scriptSelect.value = '';
+        currentBadge.textContent = '(nuovo)';
+        btnUpdate.disabled = true;
+        document.getElementById('updateSelectedScript').value = '';
+    }
+
     updateDensityButtonLabel();
     updateColumnWrapButtonLabel();
 
@@ -1537,6 +1856,271 @@
         btnUpdate.disabled = true;
         document.getElementById('updateSelectedScript').value = '';
     }
+
+    // ── Connessioni Oracle ────────────────────────────────────────────────────────
+    function getActiveConnectionId() {
+        return (activeConnectionIdInput.value || '').trim();
+    }
+
+    function setActiveConnectionId(connectionId) {
+        activeConnectionIdInput.value = connectionId || '';
+    }
+
+    function getCurrentDraftKey(connectionId) {
+        const key = (connectionId || getActiveConnectionId() || '').trim();
+        return key || DEFAULT_DRAFT_KEY;
+    }
+
+    function loadConnectionDraftsMap() {
+        try {
+            const raw = localStorage.getItem(CONNECTION_EDITOR_DRAFTS_KEY);
+            if (!raw) {
+                return {};
+            }
+            const parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                return {};
+            }
+            return parsed;
+        } catch (e) {
+            return {};
+        }
+    }
+
+    function saveConnectionDraftsMap(map) {
+        localStorage.setItem(CONNECTION_EDITOR_DRAFTS_KEY, JSON.stringify(map));
+    }
+
+    function saveCurrentConnectionDraft(connectionId) {
+        const drafts = loadConnectionDraftsMap();
+        const key = getCurrentDraftKey(connectionId);
+        drafts[key] = {
+            sqlText: sqlEditor.value || '',
+            queryLabel: queryLabelInput.value || '',
+            queryParams: queryParams.value || '',
+            saveName: saveNameInput.value || '',
+            updatedAt: Date.now()
+        };
+        saveConnectionDraftsMap(drafts);
+    }
+
+    function applyConnectionDraft(connectionId) {
+        const drafts = loadConnectionDraftsMap();
+        const key = getCurrentDraftKey(connectionId);
+        const draft = drafts[key];
+        if (!draft) {
+            return;
+        }
+        sqlEditor.value = draft.sqlText || '';
+        queryLabelInput.value = draft.queryLabel || '';
+        queryParams.value = draft.queryParams || '';
+        saveNameInput.value = draft.saveName || '';
+        updateLineNumbers();
+        hideSuggestions();
+    }
+
+    function bootstrapCurrentDraftIfMissing() {
+        const drafts = loadConnectionDraftsMap();
+        const key = getCurrentDraftKey();
+        if (drafts[key]) {
+            return;
+        }
+        saveCurrentConnectionDraft();
+    }
+
+    function loadConnectionProfiles() {
+        return savedConnectionProfiles.slice();
+    }
+
+    function setSavedConnectionProfiles(profiles) {
+        if (!Array.isArray(profiles)) {
+            savedConnectionProfiles = [];
+            return;
+        }
+        savedConnectionProfiles = profiles.filter((p) => p && p.label && p.connectionTarget && p.username);
+    }
+
+    function renderConnectionProfilesSelect() {
+        const profiles = loadConnectionProfiles();
+        const options = ['<option value="">Profili connessione salvati</option>'];
+        profiles.forEach((profile, idx) => {
+            const schema = profile.schema ? (' [' + profile.schema + ']') : '';
+            options.push('<option value="' + idx + '">' +
+                escapeHtml(profile.label + ' - ' + profile.connectionTarget + ' - ' + profile.username + schema) +
+                '</option>');
+        });
+        connProfileSelect.innerHTML = options.join('');
+    }
+
+    function normalizeConnectionTargetInput(rawValue) {
+        let value = (rawValue || '').trim();
+        const lower = value.toLowerCase();
+        if (lower.startsWith('jdbc:oracle:thin:@')) {
+            value = value.substring('jdbc:oracle:thin:@'.length).trim();
+        } else if (lower.startsWith('jdbc:oracle:tin:@')) {
+            value = value.substring('jdbc:oracle:tin:@'.length).trim();
+        }
+        return value;
+    }
+
+    function applySavedProfile() {
+        const selectedIndex = connProfileSelect.value;
+        if (selectedIndex === '') {
+            return;
+        }
+        const profiles = loadConnectionProfiles();
+        const profile = profiles[Number(selectedIndex)];
+        if (!profile) {
+            return;
+        }
+        connLabel.value = profile.label || '';
+        connTarget.value = profile.connectionTarget || '';
+        connUsername.value = profile.username || '';
+        connSchema.value = profile.schema || '';
+        connPassword.focus();
+    }
+
+    function renderConnectionTabs(connections, activeConnectionId) {
+        if (!connections || !connections.length) {
+            connectionTabs.innerHTML = '<span style="font-size:0.72rem;color:#64748b">Nessuna connessione aperta</span>';
+            return;
+        }
+
+        connectionTabs.innerHTML = connections.map((conn) => {
+            const activeClass = conn.id === activeConnectionId ? ' active' : '';
+            const status = conn.reachable ? '●' : '○';
+            const schema = conn.schema ? (' [' + conn.schema + ']') : '';
+            return '<span class="connection-tab' + activeClass + '" data-connection-id="' + escapeHtml(conn.id) + '">' +
+                '<span class="conn-activate" data-connection-id="' + escapeHtml(conn.id) + '" style="cursor:pointer">' +
+                status + ' ' + escapeHtml(conn.label) + schema +
+                '</span>' +
+                '<button class="close-btn" data-close-id="' + escapeHtml(conn.id) + '" title="Chiudi connessione">×</button>' +
+                '</span>';
+        }).join('');
+    }
+
+    async function refreshConnectionsAndSchema() {
+        const response = await fetch('/api/connections');
+        if (!response.ok) {
+            throw new Error('HTTP ' + response.status);
+        }
+        const data = await response.json();
+        if (!data.ok) {
+            throw new Error(data.message || 'Errore caricamento connessioni');
+        }
+        setSavedConnectionProfiles(data.savedProfiles || []);
+        renderConnectionProfilesSelect();
+        setActiveConnectionId(data.activeConnectionId || '');
+        setHeaderActiveConnectionLabel(data.activeConnectionLabel || '');
+        updateHeaderRobotState(data.connections || [], data.activeConnectionId || '');
+        setScriptLibraryScope(data.activeConnectionLabel || '');
+        renderScriptSelectOptions(data.availableScripts || []);
+        applyConnectionDraft(getActiveConnectionId());
+        renderConnectionTabs(data.connections || [], data.activeConnectionId || '');
+        wireConnectionTabs();
+        await reloadSchemaGroups();
+    }
+
+    async function openConnection() {
+        saveCurrentConnectionDraft();
+        const label = connLabel.value.trim();
+        const connectionTarget = normalizeConnectionTargetInput(connTarget.value);
+        const username = connUsername.value.trim();
+        const password = connPassword.value;
+        const schema = connSchema.value.trim();
+        if (!label || !connectionTarget || !username || !password) {
+            showMsg('Compila etichetta, dbserver:porta:sid, username e password.', false);
+            return;
+        }
+        connTarget.value = connectionTarget;
+
+        const fd = new FormData();
+        fd.append('label', label);
+        fd.append('connectionTarget', connectionTarget);
+        fd.append('username', username);
+        fd.append('password', password);
+        fd.append('schema', schema);
+
+        const response = await fetch('/api/connections/open', { method: 'POST', body: fd });
+        if (!response.ok) {
+            throw new Error('HTTP ' + response.status);
+        }
+        const data = await response.json();
+        if (!data.ok) {
+            throw new Error(data.message || 'Apertura connessione fallita');
+        }
+
+        connPassword.value = '';
+        showMsg(data.message || 'Connessione aperta', true);
+        await refreshConnectionsAndSchema();
+    }
+
+    async function activateConnection(connectionId) {
+        saveCurrentConnectionDraft();
+        const fd = new FormData();
+        fd.append('connectionId', connectionId);
+        const response = await fetch('/api/connections/activate', { method: 'POST', body: fd });
+        if (!response.ok) {
+            throw new Error('HTTP ' + response.status);
+        }
+        const data = await response.json();
+        if (!data.ok) {
+            throw new Error(data.message || 'Attivazione connessione fallita');
+        }
+        await refreshConnectionsAndSchema();
+    }
+
+    async function closeConnection(connectionId) {
+        saveCurrentConnectionDraft();
+        const fd = new FormData();
+        fd.append('connectionId', connectionId);
+        const response = await fetch('/api/connections/close', { method: 'POST', body: fd });
+        if (!response.ok) {
+            throw new Error('HTTP ' + response.status);
+        }
+        const data = await response.json();
+        if (!data.ok) {
+            throw new Error(data.message || 'Chiusura connessione fallita');
+        }
+        await refreshConnectionsAndSchema();
+    }
+
+    function wireConnectionTabs() {
+        connectionTabs.querySelectorAll('.conn-activate').forEach((item) => {
+            item.addEventListener('click', async (e) => {
+                const connectionId = e.currentTarget.getAttribute('data-connection-id');
+                if (!connectionId) return;
+                try {
+                    await activateConnection(connectionId);
+                } catch (err) {
+                    showMsg('Errore attivazione connessione: ' + err.message, false);
+                }
+            });
+        });
+
+        connectionTabs.querySelectorAll('.close-btn').forEach((btn) => {
+            btn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const connectionId = e.currentTarget.getAttribute('data-close-id');
+                if (!connectionId) return;
+                try {
+                    await closeConnection(connectionId);
+                } catch (err) {
+                    showMsg('Errore chiusura connessione: ' + err.message, false);
+                }
+            });
+        });
+    }
+
+    btnOpenConnection.addEventListener('click', async () => {
+        try {
+            await openConnection();
+        } catch (err) {
+            showMsg('Errore apertura connessione: ' + err.message, false);
+        }
+    });
+    connProfileSelect.addEventListener('change', applySavedProfile);
 
     // ── Schema sidebar (load all schema objects) ─────────────────────────────────
     const schemaFilter = document.getElementById('schemaFilter');
@@ -1590,7 +2174,12 @@
         const groupKey = toggle.getAttribute('data-group');
         const itemsId = toggle.getAttribute('data-toggle-id');
         const itemsDiv = document.getElementById(itemsId);
+        const connectionId = getActiveConnectionId();
         if (!groupKey || !itemsDiv || itemsDiv.dataset.loaded === 'true' || itemsDiv.dataset.loading === 'true') {
+            return itemsDiv;
+        }
+        if (!connectionId) {
+            itemsDiv.innerHTML = '<div class="schema-error">Apri una connessione Oracle per leggere lo schema</div>';
             return itemsDiv;
         }
 
@@ -1600,7 +2189,7 @@
         itemsDiv.innerHTML = '<div class="schema-loading">Reading...</div>';
 
         try {
-            const response = await fetch('/api/schema/group?group=' + encodeURIComponent(groupKey));
+            const response = await fetch('/api/schema/group?group=' + encodeURIComponent(groupKey) + '&connectionId=' + encodeURIComponent(connectionId));
             if (!response.ok) {
                 throw new Error('HTTP ' + response.status);
             }
@@ -1650,8 +2239,51 @@
         setupSchemaFilter();
     }
 
-    function loadSchemaObjects() {
+    async function reloadSchemaGroups() {
+        const schemaContent = document.getElementById('schemaContent');
+        const connectionId = getActiveConnectionId();
+        if (!connectionId) {
+            schemaContent.innerHTML = '<div class="schema-loading">Apri una connessione Oracle per visualizzare gli oggetti schema</div>';
+            return;
+        }
+
+        const response = await fetch('/api/schema?connectionId=' + encodeURIComponent(connectionId));
+        if (!response.ok) {
+            throw new Error('HTTP ' + response.status);
+        }
+        const data = await response.json();
+        if (!data.ok) {
+            throw new Error(data.error || 'Errore caricamento schema');
+        }
+        const groups = data.schemaGroups || [];
+        if (!groups.length) {
+            schemaContent.innerHTML = '<div class="schema-loading">Nessun oggetto schema disponibile</div>';
+            return;
+        }
+
+        schemaContent.innerHTML = groups.map((group) => {
+            const key = group.key || '';
+            const domId = group.domId || schemaItemsId(key);
+            const count = Number(group.itemCount || 0);
+            return '<div class="schema-group" data-group-key="' + escapeHtml(key) + '">' +
+                '<div class="schema-group-toggle collapsed" data-group="' + escapeHtml(key) + '" data-toggle-id="' + escapeHtml(domId) + '" data-loaded="false">' +
+                '<span class="arrow">▶</span>' +
+                '<strong>' + escapeHtml(key + ' (' + count + ')') + '</strong>' +
+                '</div>' +
+                '<div class="schema-items collapsed" id="' + escapeHtml(domId) + '" data-loaded="false">' +
+                '<div class="schema-loading">Premi per caricare</div>' +
+                '</div>' +
+                '</div>';
+        }).join('');
         wireSchemaSidebar();
+    }
+
+    function loadSchemaObjects() {
+        bootstrapCurrentDraftIfMissing();
+        renderConnectionProfilesSelect();
+        refreshConnectionsAndSchema().catch((err) => {
+            showMsg('Errore caricamento connessioni/schema: ' + err.message, false);
+        });
     }
 
     function wireSchemaItems(root) {
@@ -1670,6 +2302,7 @@
                 sqlEditor.selectionEnd = cursorPos + name.length;
                 sqlEditor.focus();
                 updateLineNumbers();
+                saveCurrentConnectionDraft();
             });
         });
     }
@@ -1702,7 +2335,10 @@
                 const shouldShow = filterText === '' ? true : (visibleCount > 0 || headerMatch || !loaded);
                 group.classList.toggle('hidden', !shouldShow);
                 if (loaded) {
-                    toggle.querySelector('.item-count').textContent = items.length;
+                    const countNode = toggle.querySelector('.item-count');
+                    if (countNode) {
+                        countNode.textContent = items.length;
+                    }
                 }
             });
         });

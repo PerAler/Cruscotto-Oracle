@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cruscotto Procedure Oracle</title>
+    <title>Cruscotto Oracle</title>
     <link id="appFavicon" rel="icon" type="image/svg+xml" href="/icon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css">
     <link rel="stylesheet" th:href="@{/dashboard.css(v=${#temporals.format(#temporals.createNow(), 'yyyyMMddHHmmss')})}">
@@ -245,8 +245,8 @@
             <path d="M38 74 Q28 86 36 98" class="spark"/>
             <path d="M160 60 Q176 76 164 92" class="spark" style="animation-delay:0.45s"/>
         </svg>
-                <div class="hero-copy">
-                        <h1 class="hero-title" th:classappend="' state-' + ${robotState}">Cruscotto Procedure Oracle</h1>
+        <div class="hero-copy">
+            <h1 class="hero-title" th:classappend="' state-' + ${robotState}">Cruscotto Oracle</h1>
             <span class="robot-status-label"
                   th:classappend="' state-' + ${robotState}"
                   th:text="${robotState == 'db-offline' ? 'Robot offline: DB KO' : (robotState == 'script-error' ? 'Robot in allarme: script KO' : 'Robot operativo: DB OK')}">
@@ -260,12 +260,12 @@
         avviata alle
         <strong th:text="${#temporals.format(runtimeStartedAt, 'dd/MM/yyyy HH:mm:ss')}"></strong>
         · v<strong th:text="${appVersion}"></strong>
-        · <a href="/api/readme" target="_blank" rel="noopener" 
+        · <a href="/api/readme" target="_blank" rel="noopener"
              style="color:rgba(255,255,255,0.8);text-decoration:none;font-size:0.85rem;transition:all 0.2s;border-radius:3px;padding:0.2rem 0.4rem"
              onmouseover="this.style.background='rgba(255,255,255,0.12)';this.style.color='rgba(255,255,255,1)'"
              onmouseout="this.style.background='transparent';this.style.color='rgba(255,255,255,0.8)'">
-             📖 README
-          </a>
+            📖 README
+        </a>
     </p>
 </header>
 
@@ -311,10 +311,11 @@
     <section class="card">
         <div style="display:flex;align-items:baseline;gap:1rem;flex-wrap:wrap;margin-bottom:0.5rem">
             <h2 style="margin:0">Selezione Script SQL</h2>
-            <a href="/editor"
-               style="display:inline-block;background:#05668d;color:#fff;border-radius:7px;padding:0.35rem 0.9rem;font-size:0.85rem;font-weight:600;text-decoration:none">
-                ✦ Apri Editor dedicato
-            </a>
+            <button type="button"
+                    onclick="window.location.reload()"
+                    style="display:inline-block;background:#05668d;color:#fff;border:none;border-radius:7px;padding:0.35rem 0.9rem;font-size:0.85rem;font-weight:600;cursor:pointer">
+                ⟳ Refresh pagina
+            </button>
         </div>
         <p class="meta" style="margin:0 0 0.5rem">
             Connessione attiva:
@@ -322,7 +323,7 @@
         </p>
         <input type="hidden" id="activeConnectionId" th:value="${activeConnectionId}">
         <input type="hidden" id="activeConnectionLabel" th:value="${activeConnectionLabel}">
-        <form method="get" action="/dashboard" class="form-block" id="scriptSelectionForm">
+        <form method="get" action="/utility" class="form-block" id="scriptSelectionForm">
             <label for="selectedProcedure">Script della libreria attiva <span th:text="${activeConnectionLabel != null and !activeConnectionLabel.isBlank() ? '(' + activeConnectionLabel + ')' : '(globale)'}">(globale)</span></label>
             <input type="text" id="scriptFilter" placeholder="Filtra script...">
             <select id="selectedProcedure" name="selectedProcedure">

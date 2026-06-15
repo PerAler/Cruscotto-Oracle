@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Errori - Cruscotto Procedure Oracle</title>
+    <link rel="icon" type="image/svg+xml" href="/icon.svg">
     <link rel="stylesheet" th:href="@{/dashboard.css}">
 </head>
 <body>
@@ -11,7 +12,10 @@
 <div class="bg-shape shape-b"></div>
 
 <header class="hero">
-    <h1>Errori di Esecuzione</h1>
+    <div style="display:flex;align-items:center;gap:0.9rem;justify-content:center;flex-wrap:wrap">
+        <img src="/icon.svg" alt="Robot" width="44" height="44" style="flex-shrink:0">
+        <h1 style="margin:0">Errori di Esecuzione</h1>
+    </div>
     <p>Log dettagliato degli errori durante l'esecuzione delle procedure</p>
     <p>
         Istanza PID <strong th:text="${runtimePid}"></strong>

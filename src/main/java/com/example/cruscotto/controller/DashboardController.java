@@ -1,13 +1,14 @@
 package com.example.cruscotto.controller;
 
+import com.example.cruscotto.model.OracleConnectionInfo;
 import com.example.cruscotto.service.ExecutionLogService;
+import com.example.cruscotto.service.OracleConnectionManager;
 import com.example.cruscotto.service.OracleProcedureExecutorService;
 import com.example.cruscotto.service.OracleSchemaService;
 import com.example.cruscotto.service.QueryOutputHtmlService;
 import com.example.cruscotto.service.ScheduledExecutionService;
 import com.example.cruscotto.service.SqlProcedureCatalogService;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ContentDisposition;
@@ -36,6 +37,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.springframework.web.util.UriComponentsBuilder;
@@ -47,7 +49,7 @@ public class DashboardController {
                                   String oracleCauseSection) {
     }
 
-    private static final String APP_VERSION = "1.0.6";
+    private static final String APP_VERSION = "1.2.0";
 
     private final SqlProcedureCatalogService catalogService;
     private final OracleProcedureExecutorService executorService;
@@ -55,7 +57,7 @@ public class DashboardController {
     private final ScheduledExecutionService scheduledExecutionService;
     private final ExecutionLogService executionLogService;
     private final QueryOutputHtmlService queryOutputHtmlService;
-    private final NamedParameterJdbcTemplate namedParameterJdbcTemplate;
+    private final OracleConnectionManager connectionManager;
     private final List<String> applications;
     private final String defaultApplication;
     private final String runtimePid;
@@ -67,7 +69,7 @@ public class DashboardController {
                                ScheduledExecutionService scheduledExecutionService,
                                ExecutionLogService executionLogService,
                                QueryOutputHtmlService queryOutputHtmlService,
-                               NamedParameterJdbcTemplate namedParameterJdbcTemplate,
+                               OracleConnectionManager connectionManager,
                                @Value("${app.target-applications:ALER}") String configuredApplications,
                                @Value("${app.default-application:ALER}") String defaultApplication) {
         this.catalogService = catalogService;
@@ -76,7 +78,7 @@ public class DashboardController {
         this.scheduledExecutionService = scheduledExecutionService;
         this.executionLogService = executionLogService;
         this.queryOutputHtmlService = queryOutputHtmlService;
-        this.namedParameterJdbcTemplate = namedParameterJdbcTemplate;
+        this.connectionManager = connectionManager;
         this.applications = Arrays.stream(configuredApplications.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isBlank())
@@ -86,13 +88,25 @@ public class DashboardController {
         this.runtimeStartedAt = Instant.now();
     }
 
-    @GetMapping({"/", "/dashboard", "/dashboard/"})
+    @GetMapping("/")
+    public String home() {
+        return "redirect:/dashboard";
+    }
+
+    @GetMapping({"/dashboard", "/dashboard/"})
+    public String dashboard() {
+        return "redirect:/editor";
+    }
+
+    @GetMapping({"/utility", "/utility/"})
     public String index(@RequestParam(value = "selectedProcedure", required = false) String selectedProcedure,
                         @RequestParam(value = "successMessage", required = false) String successMessage,
                         @RequestParam(value = "errorMessage", required = false) String errorMessage,
                         @RequestParam(value = "outputFile", required = false) String outputFile,
                         Model model) {
-        List<com.example.cruscotto.model.ProcedureDefinition> allProcedures = catalogService.findAll();
+        String activeConnectionId = connectionManager.getActiveConnectionId().orElse(null);
+        String activeConnectionLabel = resolveConnectionLabel(activeConnectionId);
+        List<com.example.cruscotto.model.ProcedureDefinition> allProcedures = catalogService.findAll(activeConnectionLabel);
         String effectiveSelection = resolveSelection(selectedProcedure, allProcedures);
 
         List<com.example.cruscotto.model.ProcedureDefinition> visibleProcedures = allProcedures;
@@ -137,8 +151,10 @@ public class DashboardController {
         model.addAttribute("defaultApplication", defaultApplication);
         model.addAttribute("runtimePid", runtimePid);
         model.addAttribute("runtimeStartedAt", runtimeStartedAt);
+        model.addAttribute("activeConnectionId", activeConnectionId == null ? "" : activeConnectionId);
+        model.addAttribute("activeConnectionLabel", activeConnectionLabel == null ? "" : activeConnectionLabel);
         model.addAttribute("appVersion", APP_VERSION);
-        return "dashboard";
+        return "utility";
     }
 
     @GetMapping("/errors")
@@ -191,12 +207,7 @@ public class DashboardController {
     }
 
     private boolean isDatabaseConnected() {
-        try {
-            Integer probe = namedParameterJdbcTemplate.getJdbcTemplate().queryForObject("SELECT 1 FROM DUAL", Integer.class);
-            return probe != null && probe == 1;
-        } catch (Exception ex) {
-            return false;
-        }
+        return connectionManager.isActiveConnectionReachable();
     }
 
     private String resolveRobotState(boolean dbConnected,
@@ -250,8 +261,9 @@ public class DashboardController {
         String successMessage = null;
         String errorMessage = null;
         try {
+            String activeConnectionId = connectionManager.getActiveConnectionId().orElse(null);
             Map<String, Object> params = extractProcedureParams(requestParams);
-            String message = executorService.runProcedure(name, params);
+            String message = executorService.runProcedure(activeConnectionId, name, params);
             successMessage = name + ": " + message;
         } catch (Exception ex) {
             errorMessage = name + ": " + ex.getMessage();
@@ -308,7 +320,8 @@ public class DashboardController {
         String successMessage = null;
         String errorMessage = null;
         try {
-            catalogService.reloadProcedures();
+            String activeConnectionLabel = resolveConnectionLabel(connectionManager.getActiveConnectionId().orElse(null));
+            catalogService.reloadProcedures(activeConnectionLabel);
             successMessage = "Catalogo SQL ricaricato";
         } catch (Exception ex) {
             errorMessage = "Errore durante la ricarica del catalogo SQL: " + ex.getMessage();
@@ -320,14 +333,18 @@ public class DashboardController {
     public String runEditorQuery(@RequestParam("sqlText") String sqlText,
                                  @RequestParam(value = "queryLabel", required = false) String queryLabel,
                                  @RequestParam(value = "queryParams", required = false) String queryParams,
-                                 @RequestParam(value = "selectedProcedure", required = false) String selectedProcedure) {
+                                 @RequestParam(value = "selectedProcedure", required = false) String selectedProcedure,
+                                 @RequestParam(value = "connectionId", required = false) String connectionId) {
         String successMessage = null;
         String errorMessage = null;
         String outputFile = null;
 
         try {
+            String activeConnectionId = (connectionId == null || connectionId.isBlank())
+                    ? connectionManager.getActiveConnectionId().orElse(null)
+                    : connectionId.trim();
             Map<String, Object> params = parseEditorParams(queryParams);
-            String message = executorService.runAdhocSelect(queryLabel, sqlText, params);
+            String message = executorService.runAdhocSelect(activeConnectionId, queryLabel, sqlText, params);
             String label = (queryLabel == null || queryLabel.isBlank()) ? "SQL Editor" : queryLabel.trim();
             successMessage = label + ": " + message;
             
@@ -350,14 +367,16 @@ public class DashboardController {
     public String saveEditorQuery(@RequestParam("sqlText") String sqlText,
                                   @RequestParam(value = "queryFileName", required = false) String queryFileName,
                                   @RequestParam(value = "queryLabel", required = false) String queryLabel,
-                                  @RequestParam(value = "selectedProcedure", required = false) String selectedProcedure) {
+                                  @RequestParam(value = "selectedProcedure", required = false) String selectedProcedure,
+                                  @RequestParam(value = "connectionId", required = false) String connectionId) {
         String successMessage = null;
         String errorMessage = null;
         String nextSelection = selectedProcedure;
 
         try {
+            String activeConnectionLabel = resolveConnectionLabel(connectionId);
             String requestedName = resolveQuerySaveName(queryFileName, queryLabel);
-            String savedName = catalogService.saveSqlFile(requestedName, sqlText, false);
+            String savedName = catalogService.saveSqlFile(activeConnectionLabel, requestedName, sqlText, false);
             successMessage = "Query salvata come '" + savedName + ".sql'";
             nextSelection = savedName;
         } catch (Exception ex) {
@@ -369,15 +388,17 @@ public class DashboardController {
 
     @PostMapping("/query/update")
     public String updateSelectedQuery(@RequestParam("sqlText") String sqlText,
-                                      @RequestParam(value = "selectedProcedure", required = false) String selectedProcedure) {
+                                      @RequestParam(value = "selectedProcedure", required = false) String selectedProcedure,
+                                      @RequestParam(value = "connectionId", required = false) String connectionId) {
         String successMessage = null;
         String errorMessage = null;
 
         try {
+            String activeConnectionLabel = resolveConnectionLabel(connectionId);
             if (selectedProcedure == null || selectedProcedure.isBlank()) {
                 throw new IllegalArgumentException("Seleziona lo script da aggiornare");
             }
-            String updatedName = catalogService.updateSqlFile(selectedProcedure, sqlText);
+            String updatedName = catalogService.updateSqlFile(activeConnectionLabel, selectedProcedure, sqlText);
             successMessage = "Script aggiornato: '" + updatedName + ".sql'";
         } catch (Exception ex) {
             errorMessage = "Aggiornamento script: " + ex.getMessage();
@@ -502,6 +523,18 @@ public class DashboardController {
         return exists ? selectedProcedure : allProcedures.get(0).name();
     }
 
+    private String resolveConnectionLabel(String connectionId) {
+        if (connectionId != null && !connectionId.isBlank()) {
+            Optional<OracleConnectionInfo> info = connectionManager.findConnectionInfo(connectionId);
+            if (info.isPresent()) {
+                return info.get().label();
+            }
+        }
+        return connectionManager.getActiveConnectionInfo()
+                .map(OracleConnectionInfo::label)
+                .orElse(null);
+    }
+
     private Map<String, Object> extractProcedureParams(Map<String, String> requestParams) {
         Map<String, Object> params = new LinkedHashMap<>();
 
@@ -585,7 +618,7 @@ public class DashboardController {
     }
 
     private String redirectToDashboardWithOutput(String selectedProcedure, String successMessage, String errorMessage, String outputFile) {
-        UriComponentsBuilder builder = UriComponentsBuilder.fromPath("/");
+        UriComponentsBuilder builder = UriComponentsBuilder.fromPath("/utility");
         if (selectedProcedure != null && !selectedProcedure.isBlank()) {
             builder.queryParam("selectedProcedure", selectedProcedure);
         }
@@ -620,10 +653,22 @@ public class DashboardController {
 
     @GetMapping("/editor")
     public String editorPage(@RequestParam(value = "script", required = false) String scriptName,
+                             @RequestParam(value = "connectionId", required = false) String connectionId,
                              @RequestParam(value = "msg", required = false) String msg,
                              @RequestParam(value = "error", required = false) String error,
                              Model model) {
-        List<com.example.cruscotto.model.ProcedureDefinition> allProcedures = catalogService.findAll();
+        String requestedConnectionId = (connectionId == null || connectionId.isBlank())
+                ? connectionManager.getActiveConnectionId().orElse(null)
+                : connectionId.trim();
+        if (requestedConnectionId != null && !requestedConnectionId.isBlank()) {
+            try {
+                connectionManager.activateConnection(requestedConnectionId);
+            } catch (Exception ignored) {
+                requestedConnectionId = connectionManager.getActiveConnectionId().orElse(null);
+            }
+        }
+        String activeConnectionLabel = resolveConnectionLabel(requestedConnectionId);
+        List<com.example.cruscotto.model.ProcedureDefinition> allProcedures = catalogService.findAll(activeConnectionLabel);
         String effectiveSelection = null;
         if (scriptName != null && !scriptName.isBlank()) {
             boolean found = allProcedures.stream().anyMatch(p -> p.name().equals(scriptName));
@@ -640,18 +685,30 @@ public class DashboardController {
                     .orElse("");
         }
 
-        boolean dbConnected = isDatabaseConnected();
+        String activeConnectionId = connectionManager.getActiveConnectionId().orElse(null);
+        boolean dbConnected = activeConnectionId != null && connectionManager.isConnectionReachable(activeConnectionId);
         List<com.example.cruscotto.model.ExecutionLogEntry> latestLogs = executionLogService.latest();
+        long errorCount = latestLogs.stream().filter(e -> "KO".equals(e.status())).count();
+        long okCount = latestLogs.stream().filter(e -> "OK".equals(e.status())).count();
+        long outputCount = latestLogs.stream().filter(e -> e.outputHtmlFile() != null).count();
         String robotState = resolveRobotState(dbConnected, error, latestLogs);
-        List<com.example.cruscotto.model.SchemaGroupSummary> schemaGroups = oracleSchemaService.getSchemaGroupSummaries();
+        List<com.example.cruscotto.model.SchemaGroupSummary> schemaGroups = activeConnectionId == null
+                ? List.of()
+                : oracleSchemaService.getSchemaGroupSummaries(activeConnectionId);
 
         model.addAttribute("allProcedures", allProcedures);
         model.addAttribute("selectedScript", effectiveSelection);
         model.addAttribute("sqlContent", sqlContent);
         model.addAttribute("schemaGroups", schemaGroups);
+        model.addAttribute("activeConnectionId", activeConnectionId == null ? "" : activeConnectionId);
+        model.addAttribute("activeConnectionLabel", activeConnectionLabel == null ? "" : activeConnectionLabel);
         model.addAttribute("successMessage", msg);
         model.addAttribute("errorMessage", error);
         model.addAttribute("robotState", robotState);
+        model.addAttribute("logs", latestLogs);
+        model.addAttribute("errorCount", errorCount);
+        model.addAttribute("okCount", okCount);
+        model.addAttribute("outputCount", outputCount);
         model.addAttribute("runtimePid", runtimePid);
         model.addAttribute("runtimeStartedAt", runtimeStartedAt);
         model.addAttribute("appVersion", APP_VERSION);
@@ -661,9 +718,11 @@ public class DashboardController {
     @GetMapping(value = "/editor/load-script", produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
     public Map<String, Object> editorLoadScript(
-            @RequestParam("script") String scriptName) {
+            @RequestParam("script") String scriptName,
+            @RequestParam(value = "connectionId", required = false) String connectionId) {
         Map<String, Object> result = new LinkedHashMap<>();
-        catalogService.findByName(scriptName).ifPresentOrElse(
+        String activeConnectionLabel = resolveConnectionLabel(connectionId);
+        catalogService.findByName(activeConnectionLabel, scriptName).ifPresentOrElse(
                 proc -> {
                     result.put("ok", true);
                     result.put("sqlText", proc.sqlText());
@@ -681,11 +740,12 @@ public class DashboardController {
     public Map<String, Object> editorExecute(
             @RequestParam("sqlText") String sqlText,
             @RequestParam(value = "queryLabel", required = false) String queryLabel,
-            @RequestParam(value = "queryParams", required = false) String queryParams) {
+            @RequestParam(value = "queryParams", required = false) String queryParams,
+            @RequestParam(value = "connectionId", required = false) String connectionId) {
         Map<String, Object> result = new LinkedHashMap<>();
         try {
             Map<String, Object> params = parseEditorParams(queryParams);
-            String message = executorService.runAdhocSelect(queryLabel, sqlText, params);
+            String message = executorService.runAdhocSelect(connectionId, queryLabel, sqlText, params);
             result.put("ok", true);
             result.put("message", message);
             List<com.example.cruscotto.model.ExecutionLogEntry> logs = executionLogService.latest();
@@ -703,33 +763,40 @@ public class DashboardController {
     public String editorSave(
             @RequestParam("sqlText") String sqlText,
             @RequestParam(value = "queryFileName", required = false) String queryFileName,
-            @RequestParam(value = "queryLabel", required = false) String queryLabel) {
+            @RequestParam(value = "queryLabel", required = false) String queryLabel,
+            @RequestParam(value = "connectionId", required = false) String connectionId) {
         try {
+            String activeConnectionLabel = resolveConnectionLabel(connectionId);
             String requestedName = resolveQuerySaveName(queryFileName, queryLabel);
-            String savedName = catalogService.saveSqlFile(requestedName, sqlText, false);
-            return redirectToEditor(savedName, "Script salvato: '" + savedName + ".sql'", null);
+            String savedName = catalogService.saveSqlFile(activeConnectionLabel, requestedName, sqlText, false);
+            return redirectToEditor(savedName, "Script salvato: '" + savedName + ".sql'", null, connectionId);
         } catch (Exception ex) {
-            return redirectToEditor(null, null, "Salvataggio: " + ex.getMessage());
+            return redirectToEditor(null, null, "Salvataggio: " + ex.getMessage(), connectionId);
         }
     }
 
     @PostMapping("/editor/update")
     public String editorUpdate(
             @RequestParam("sqlText") String sqlText,
-            @RequestParam(value = "selectedScript", required = false) String selectedScript) {
+            @RequestParam(value = "selectedScript", required = false) String selectedScript,
+            @RequestParam(value = "connectionId", required = false) String connectionId) {
         try {
+            String activeConnectionLabel = resolveConnectionLabel(connectionId);
             if (selectedScript == null || selectedScript.isBlank()) {
                 throw new IllegalArgumentException("Seleziona uno script da aggiornare");
             }
-            String updatedName = catalogService.updateSqlFile(selectedScript, sqlText);
-            return redirectToEditor(updatedName, "Script aggiornato: '" + updatedName + ".sql'", null);
+            String updatedName = catalogService.updateSqlFile(activeConnectionLabel, selectedScript, sqlText);
+            return redirectToEditor(updatedName, "Script aggiornato: '" + updatedName + ".sql'", null, connectionId);
         } catch (Exception ex) {
-            return redirectToEditor(selectedScript, null, "Aggiornamento: " + ex.getMessage());
+            return redirectToEditor(selectedScript, null, "Aggiornamento: " + ex.getMessage(), connectionId);
         }
     }
 
-    private String redirectToEditor(String script, String msg, String error) {
+    private String redirectToEditor(String script, String msg, String error, String connectionId) {
         UriComponentsBuilder builder = UriComponentsBuilder.fromPath("/editor");
+        if (connectionId != null && !connectionId.isBlank()) {
+            builder.queryParam("connectionId", connectionId);
+        }
         if (script != null && !script.isBlank()) {
             builder.queryParam("script", script);
         }
@@ -744,11 +811,12 @@ public class DashboardController {
 
     @GetMapping(value = "/api/schema", produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
-    public Map<String, Object> getSchemaObjects() {
+    public Map<String, Object> getSchemaObjects(@RequestParam(value = "connectionId", required = false) String connectionId) {
         Map<String, Object> result = new LinkedHashMap<>();
         try {
+            String effectiveConnectionId = (connectionId == null || connectionId.isBlank()) ? null : connectionId.trim();
             result.put("ok", true);
-            result.put("schemaGroups", oracleSchemaService.getSchemaGroupSummaries());
+            result.put("schemaGroups", oracleSchemaService.getSchemaGroupSummaries(effectiveConnectionId));
         } catch (Exception ex) {
             result.put("ok", false);
             result.put("error", ex.getMessage());
@@ -758,15 +826,93 @@ public class DashboardController {
 
     @GetMapping(value = "/api/schema/group", produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
-    public Map<String, Object> getSchemaGroup(@RequestParam("group") String group) {
+    public Map<String, Object> getSchemaGroup(@RequestParam("group") String group,
+                                              @RequestParam(value = "connectionId", required = false) String connectionId) {
         Map<String, Object> result = new LinkedHashMap<>();
         try {
             result.put("ok", true);
             result.put("group", group);
-            result.put("items", oracleSchemaService.getSchemaObjectsForGroup(group));
+            result.put("items", oracleSchemaService.getSchemaObjectsForGroup(connectionId, group));
         } catch (Exception ex) {
             result.put("ok", false);
             result.put("error", ex.getMessage());
+        }
+        return result;
+    }
+
+    @GetMapping(value = "/api/connections", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public Map<String, Object> listConnections() {
+        Map<String, Object> result = new LinkedHashMap<>();
+        String activeConnectionId = connectionManager.getActiveConnectionId().orElse("");
+        String activeConnectionLabel = resolveConnectionLabel(activeConnectionId);
+        result.put("ok", true);
+        result.put("activeConnectionId", activeConnectionId);
+        result.put("activeConnectionLabel", activeConnectionLabel);
+        result.put("availableScripts", catalogService.findAll(activeConnectionLabel).stream()
+                .map(com.example.cruscotto.model.ProcedureDefinition::name)
+                .toList());
+        result.put("connections", connectionManager.listConnections().stream().map(view -> {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", view.info().id());
+            row.put("label", view.info().label());
+            row.put("connectionTarget", view.info().connectionTarget());
+            row.put("jdbcUrl", view.info().jdbcUrl());
+            row.put("username", view.info().username());
+            row.put("schema", view.info().schema());
+            row.put("reachable", view.reachable());
+            return row;
+        }).toList());
+        result.put("savedProfiles", connectionManager.listSavedProfiles());
+        return result;
+    }
+
+    @PostMapping(value = "/api/connections/open", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public Map<String, Object> openConnection(@RequestParam("label") String label,
+                                              @RequestParam("connectionTarget") String connectionTarget,
+                                              @RequestParam("username") String username,
+                                              @RequestParam("password") String password,
+                                              @RequestParam(value = "schema", required = false) String schema) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        try {
+            connectionManager.openConnection(label, connectionTarget, username, password, schema);
+            result.put("ok", true);
+            result.put("message", "Connessione aperta");
+            result.put("activeConnectionId", connectionManager.getActiveConnectionId().orElse(""));
+        } catch (Exception ex) {
+            result.put("ok", false);
+            result.put("message", ex.getMessage());
+        }
+        return result;
+    }
+
+    @PostMapping(value = "/api/connections/activate", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public Map<String, Object> activateConnection(@RequestParam("connectionId") String connectionId) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        try {
+            connectionManager.activateConnection(connectionId);
+            result.put("ok", true);
+            result.put("activeConnectionId", connectionManager.getActiveConnectionId().orElse(""));
+        } catch (Exception ex) {
+            result.put("ok", false);
+            result.put("message", ex.getMessage());
+        }
+        return result;
+    }
+
+    @PostMapping(value = "/api/connections/close", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public Map<String, Object> closeConnection(@RequestParam("connectionId") String connectionId) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        try {
+            connectionManager.closeConnection(connectionId);
+            result.put("ok", true);
+            result.put("activeConnectionId", connectionManager.getActiveConnectionId().orElse(""));
+        } catch (Exception ex) {
+            result.put("ok", false);
+            result.put("message", ex.getMessage());
         }
         return result;
     }

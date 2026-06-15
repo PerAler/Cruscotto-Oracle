@@ -997,6 +997,7 @@ th, td {
     max-width: 90vw;
     max-height: 80vh;
     width: 600px;
+	height: 300px;
     display: flex;
     flex-direction: column;
     overflow: hidden;

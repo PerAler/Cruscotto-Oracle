@@ -4,14 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Log Totali - Cruscotto Procedure Oracle</title>
-    <link rel="stylesheet" th:href="@{/dashboard.css}">
+    <link rel="icon" type="image/svg+xml" href="/icon.svg">
+    <link rel="stylesheet" th:href="@{/dashboard.css(v=${#temporals.format(#temporals.createNow(), 'yyyyMMddHHmmss')})}">
 </head>
 <body>
 <div class="bg-shape shape-a"></div>
 <div class="bg-shape shape-b"></div>
 
 <header class="hero">
-    <h1>Log Totali</h1>
+    <div style="display:flex;align-items:center;gap:0.9rem;justify-content:center;flex-wrap:wrap">
+        <img src="/icon.svg" alt="Robot" width="44" height="44" style="flex-shrink:0">
+        <h1 style="margin:0">Log Totali</h1>
+    </div>
     <p>Vista completa dei log di esecuzione in finestra dedicata.</p>
     <p>
         Istanza PID <strong th:text="${runtimePid}"></strong>
