@@ -1,6 +1,7 @@
 /target/
 /output/
 /config/cruscotto-oracle-local.properties
+/config/cruscotto-oracle-connections.json
 *.log
 /.idea/
 /.vscode/

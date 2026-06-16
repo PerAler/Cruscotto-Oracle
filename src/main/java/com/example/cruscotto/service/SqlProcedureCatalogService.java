@@ -35,10 +35,10 @@ public class SqlProcedureCatalogService {
     private static final String Q_QUOTE_CLOSERS = "])>}";
 
     private final Map<String, ProcedureDefinition> procedures = new ConcurrentHashMap<>();
-    private final Path sqlDir;
+    private final Path sqlRootDir;
 
-    public SqlProcedureCatalogService(@Value("${app.sql.folder:sql}") String sqlFolder) {
-        this.sqlDir = Paths.get(sqlFolder).toAbsolutePath().normalize();
+    public SqlProcedureCatalogService(@Value("${app.sql.root-dir:${app.sql.folder:sql}}") String sqlRootDir) {
+        this.sqlRootDir = Paths.get(sqlRootDir).toAbsolutePath().normalize();
     }
 
     @PostConstruct
@@ -179,11 +179,11 @@ public class SqlProcedureCatalogService {
     }
 
     private void loadFilesystemSql() throws IOException {
-        if (!Files.exists(sqlDir)) {
+        if (!Files.exists(sqlRootDir)) {
             return;
         }
 
-        try (Stream<Path> paths = Files.walk(sqlDir)) {
+        try (Stream<Path> paths = Files.walk(sqlRootDir)) {
             paths.filter(Files::isRegularFile)
                     .filter(path -> path.getFileName().toString().toLowerCase().endsWith(".sql"))
                     .sorted()
@@ -243,7 +243,7 @@ public class SqlProcedureCatalogService {
     }
 
     private void registerFile(Path file) throws IOException {
-        registerFile(file, sqlDir, procedures);
+        registerFile(file, sqlRootDir, procedures);
     }
 
     private void registerFile(Path file, Path baseDir, Map<String, ProcedureDefinition> targetMap) throws IOException {
@@ -267,14 +267,14 @@ public class SqlProcedureCatalogService {
 
     private Path resolveTargetSqlDir(String connectionLabel) {
         if (connectionLabel == null || connectionLabel.isBlank()) {
-            return sqlDir;
+            return sqlRootDir;
         }
         String folderName = normalizeBaseName(connectionLabel);
         if (folderName.isBlank()) {
             throw new IllegalArgumentException("Etichetta connessione non valida");
         }
-        Path targetDir = sqlDir.resolve(folderName).normalize();
-        if (!targetDir.startsWith(sqlDir)) {
+        Path targetDir = sqlRootDir.resolve(folderName).normalize();
+        if (!targetDir.startsWith(sqlRootDir)) {
             throw new IllegalArgumentException("Percorso cartella SQL non valido");
         }
         return targetDir;

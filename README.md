@@ -13,10 +13,10 @@ Applicazione web Spring Boot 3 per la gestione, esecuzione e monitoraggio di scr
   - Auto-collasso del pannello dopo connessione Oracle riuscita
 - **[CHANGED] Tabs connessioni spostate nell'area editor**
   - `connectionTabs` ora in `editor-main`, allineate ai comandi script
-- **[NEW] Multi-query selezionabile nell'editor**
-  - Supporto blocchi query con marker `-- @query: NomeBlocco`
-  - Selettore "Query nel file" per eseguire un blocco specifico alla volta
-  - Parametri bind e bozza editor allineati alla query attiva
+- **[CHANGED] Esecuzione query dal cursore**
+  - L'editor esegue il blocco sotto il cursore
+  - Ogni query termina con una riga contenente solo `/`
+  - Parametri bind e bozza editor si allineano alla query corrente
 
 ### v1.2.0 (2026-06-15)
 - **[NEW] Profili connessione persistenti lato server**
@@ -42,7 +42,7 @@ Applicazione web Spring Boot 3 per la gestione, esecuzione e monitoraggio di scr
 ## Funzionalità
 
 ### Utility (`/utility`)
-- **Catalogo script SQL** — carica automaticamente tutti i file `.sql` presenti nella cartella configurata (`app.sql.folder`, default `sql`); filtro per nome in tempo reale.
+- **Catalogo script SQL** — carica automaticamente tutti i file `.sql` presenti nella cartella configurata (`app.sql.root-dir`, default `sql`); filtro per nome in tempo reale.
 - **Editor SQL rapido** — textarea con:
   - Syntax highlighting PL/SQL via Prism.js
   - Autocompletamento keyword SQL (Tab / frecce)
@@ -64,6 +64,7 @@ Applicazione web Spring Boot 3 per la gestione, esecuzione e monitoraggio di scr
 - Selezione script dal catalogo (caricamento AJAX, senza reload pagina)
 - Ricarica catalogo da disco senza riavvio
 - **Esegui** — AJAX con spinner, risultati visualizzati in iframe inline
+- **Esegui** — AJAX con spinner, esegue la query sotto il cursore; i blocchi terminano con `/` su una riga singola
 - **Vista risultati** con toggle densità (compatta / estesa) e toggle larghezza colonne
 - **Salva nuovo** / **Aggiorna script selezionato** (POST form)
 - Estrazione automatica parametri bind
@@ -148,7 +149,7 @@ CREATE GLOBAL TEMPORARY TABLE app_dbms_output_lines (
 ```
 
 ## Script SQL
-Inserisci i file `.sql` nella cartella configurata con `app.sql.folder` (default `sql`).  
+Inserisci i file `.sql` nella cartella configurata con `app.sql.root-dir` (default `sql`).  
 Per i parametri bind usa placeholder `:nomeparametro`, ad esempio:
 ```sql
 SELECT * FROM fatture WHERE anno = :anno AND stato = :stato

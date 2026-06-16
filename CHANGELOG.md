@@ -6,13 +6,19 @@ Tutte le modifiche rilevanti a questo progetto sono documentate in questo file.
 ### Added
 - Persistenza profili connessione Oracle su file locale (`config/cruscotto-oracle-connections.json`) senza password.
 - API connessioni estesa con `savedProfiles` per popolare la combo anche dopo riavvio.
-- Catalogo SQL per etichetta connessione con cartelle dedicate (`sql/<ETICHETTA>`).
+- Catalogo SQL per etichetta connessione con cartelle dedicate sotto la root configurabile (`app.sql.root-dir/<ETICHETTA>`).
 
 ### Changed
 - Editor: caricamento/salvataggio/aggiornamento script allineati alla connessione attiva.
 - Dashboard: visualizzazione etichetta connessione attiva e selezione script filtrata per etichetta.
 - Navigazione aggiornata: `/dashboard` come ingresso editor e nuova pagina utility su `/utility`.
 - Editor allineato alla utility con KPI log/errori in testa e header dinamico aggiornato dopo apertura connessione.
+
+## [1.3.0] - 2026-06-16
+### Changed
+- Editor SQL: esecuzione del blocco sotto il cursore invece del selettore query.
+- Terminatore query standardizzato su una riga contenente solo `/`.
+- Bozza editor allineata al cursore corrente.
 
 ## [1.1.0] - 2026-06-15
 ### Added

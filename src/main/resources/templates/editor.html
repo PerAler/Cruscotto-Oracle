@@ -28,30 +28,14 @@
             max-width: 420px;
         }
 
-        .query-blocks-bar {
-            display: flex;
-            align-items: center;
-            gap: 0.55rem;
-            flex-wrap: wrap;
+        .query-cursor-hint {
             margin-bottom: 0.7rem;
-        }
-
-        .query-blocks-bar label {
+            padding: 0.45rem 0.65rem;
+            border: 1px solid #d5e7f3;
+            border-radius: 6px;
+            background: #f8fbfe;
             font-size: 0.8rem;
-            font-weight: 700;
             color: #475569;
-            text-transform: uppercase;
-            letter-spacing: 0.02em;
-        }
-
-        .query-blocks-bar select {
-            min-width: 260px;
-            max-width: 100%;
-        }
-
-        .query-blocks-hint {
-            font-size: 0.75rem;
-            color: #64748b;
         }
 
         /* ── Editor SQL con numeri di riga ───────────────────────────────── */
@@ -294,13 +278,21 @@
             border: 1px solid var(--line);
             border-radius: 8px;
             background: linear-gradient(135deg, #f8fbfd 0%, #f0f7fb 100%);
-            overflow-y: auto;
+            overflow: hidden;
             padding: 0;
             display: flex;
             flex-direction: column;
+            transition: width 0.2s ease, min-width 0.2s ease, max-width 0.2s ease;
+        }
+
+        .schema-sidebar.collapsed {
+            width: 44px;
+            min-width: 44px;
+            max-width: 44px;
         }
 
         .schema-header {
+            border: 0;
             padding: 0.75rem;
             background: linear-gradient(135deg, #e8f2f8 0%, #d8e9f3 100%);
             border-bottom: 1px solid var(--line);
@@ -313,6 +305,19 @@
             align-items: center;
             gap: 0.5rem;
             flex-shrink: 0;
+            width: 100%;
+            cursor: pointer;
+            user-select: none;
+            appearance: none;
+        }
+
+        .schema-sidebar.collapsed .schema-header {
+            flex: 1;
+            flex-direction: column;
+            justify-content: center;
+            gap: 0.35rem;
+            padding: 0.45rem 0.2rem;
+            border-bottom: none;
         }
 
         .schema-header-icon {
@@ -327,6 +332,16 @@
             justify-content: center;
             color: #fff;
             font-weight: 900;
+        }
+
+        .schema-header-title {
+            display: inline-block;
+        }
+
+        .schema-sidebar.collapsed .schema-header-title {
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            white-space: nowrap;
         }
 
         .schema-content {
@@ -390,6 +405,10 @@
             border: 1px solid #bcd6e6;
             border-radius: 4px;
             font-size: 0.72rem;
+        }
+
+        .schema-sidebar.collapsed .schema-content {
+            display: none;
         }
 
         .connection-tabs {
@@ -642,6 +661,9 @@
             .schema-sidebar {
                 width: 240px;
             }
+            .schema-sidebar.collapsed {
+                width: 44px;
+            }
             .editor-with-sidebar {
                 gap: 0.75rem;
             }
@@ -654,6 +676,11 @@
             .schema-sidebar {
                 width: 100%;
                 max-height: 300px;
+            }
+            .schema-sidebar.collapsed {
+                width: 100%;
+                min-width: 0;
+                max-width: none;
             }
         }
 
@@ -940,10 +967,10 @@
 
         <!-- Schema sidebar (all schema objects) -->
         <aside class="schema-sidebar" id="schemaSidebar">
-            <div class="schema-header">
+            <button class="schema-header" id="btnToggleSchemaSidebar" type="button" aria-expanded="true" title="Collassa/espandi schema">
                 <span class="schema-header-icon">⬚</span>
-                Connessioni e schema
-            </div>
+                <span class="schema-header-title">Connessioni e schema</span>
+            </button>
             <div class="schema-content">
                 <input type="hidden" id="activeConnectionId" th:value="${activeConnectionId}">
                 <div class="connection-panel collapsed" id="connectionPanel">
@@ -1013,12 +1040,8 @@
             <button class="btn btn-sec" id="btnReloadCatalog" type="button" title="Ricarica catalogo SQL da disco">⟳ Catalogo</button>
         </div>
 
-        <div class="query-blocks-bar">
-            <label for="queryBlockSelect">Query nel file</label>
-            <select id="queryBlockSelect" title="Seleziona la query da eseguire">
-                <option value="">Script completo</option>
-            </select>
-            <span class="query-blocks-hint" id="queryBlockHint">Usa `-- @query: nome` per definire blocchi eseguibili uno alla volta.</span>
+        <div class="query-cursor-hint">
+            Posiziona il cursore dentro la query da eseguire. Il blocco termina con una riga contenente solo <strong>/</strong>.
         </div>
 
         <!-- Messaggio AJAX (visibile solo dopo esecuzione) -->
@@ -1128,8 +1151,6 @@
     const btnSave         = document.getElementById('btnSave');
     const btnUpdate       = document.getElementById('btnUpdate');
     const saveNameInput   = document.getElementById('saveNameInput');
-    const queryBlockSelect = document.getElementById('queryBlockSelect');
-    const queryBlockHint = document.getElementById('queryBlockHint');
     const queryLabelInput = document.getElementById('queryLabel');
     const queryParams     = document.getElementById('queryParams');
     const resultPanel     = document.getElementById('resultPanel');
@@ -1149,6 +1170,8 @@
     const connectionTabs = document.getElementById('connectionTabs');
     const connectionPanel = document.getElementById('connectionPanel');
     const btnToggleConnectionPanel = document.getElementById('btnToggleConnectionPanel');
+    const schemaSidebar = document.getElementById('schemaSidebar');
+    const btnToggleSchemaSidebar = document.getElementById('btnToggleSchemaSidebar');
     const btnOpenConnection = document.getElementById('btnOpenConnection');
     const connLabel = document.getElementById('connLabel');
     const connTarget = document.getElementById('connTarget');
@@ -1160,6 +1183,8 @@
     const DEFAULT_DRAFT_KEY = '__no_connection__';
     const RESULT_DENSITY_KEY = 'cruscotto.result.tableDensity';
     const RESULT_COLUMN_WRAP_KEY = 'cruscotto.result.columnWrap';
+    const SCHEMA_SIDEBAR_COLLAPSED_KEY = 'cruscotto.schemaSidebarCollapsed';
+    const QUERY_TERMINATOR_LINE = /^\s*\/\s*$/;
     let resultDensity = localStorage.getItem(RESULT_DENSITY_KEY) || 'comfortable';
     let resultColumnWrap = localStorage.getItem(RESULT_COLUMN_WRAP_KEY) === 'true';
 
@@ -1177,8 +1202,6 @@
     let suggestIndex = -1;
     let suggestContext = null;
     let savedConnectionProfiles = [];
-    let parsedQueryBlocks = [];
-    let activeQueryBlockIndex = -1;
 
     // ── Numeri di riga ───────────────────────────────────────────────────────
     function updateLineNumbers() {
@@ -1189,107 +1212,155 @@
         lineNumbers.scrollTop = sqlEditor.scrollTop;
     }
 
-    function parseQueryBlocks(sqlText) {
+    function matchingQQuoteDelimiter(openingDelimiter) {
+        const index = '[({<'.indexOf(openingDelimiter);
+        if (index >= 0) {
+            return '])>}'[index];
+        }
+        return openingDelimiter;
+    }
+
+    function parseOracleStatements(sqlText) {
         const source = sqlText || '';
-        const lines = source.split('\n');
-        const markerRegex = /^\s*--\s*@query\s*:\s*(.+?)\s*$/i;
-        const lineStarts = [];
-        let offset = 0;
-        lines.forEach((line) => {
-            lineStarts.push(offset);
-            offset += line.length + 1;
-        });
-
-        const markers = [];
-        lines.forEach((line, idx) => {
-            const match = line.match(markerRegex);
-            if (!match) {
-                return;
-            }
-            const rawName = (match[1] || '').trim();
-            const name = rawName || ('query_' + (markers.length + 1));
-            const markerStart = lineStarts[idx];
-            const sqlStart = Math.min(source.length, markerStart + line.length + 1);
-            markers.push({
-                name,
-                markerLine: idx + 1,
-                startOffset: sqlStart
-            });
-        });
-
-        if (!markers.length) {
+        if (!source.trim()) {
             return [];
         }
 
-        return markers.map((marker, idx) => {
-            const next = markers[idx + 1];
-            const endOffset = next ? lineStarts[next.markerLine - 1] : source.length;
-            const rawSql = source.substring(marker.startOffset, Math.max(marker.startOffset, endOffset));
-            return {
-                name: marker.name,
-                markerLine: marker.markerLine,
-                startOffset: marker.startOffset,
-                endOffset: Math.max(marker.startOffset, endOffset),
-                sqlText: rawSql.trim()
-            };
+        const statements = [];
+        const lines = source.split('\n');
+        let offset = 0;
+        let statementStart = 0;
+        let inBlockComment = false;
+        let inSingleQuote = false;
+        let inQQuote = false;
+        let qQuoteCloser = '';
+
+        lines.forEach((line) => {
+            const lineStart = offset;
+            const lineEnd = lineStart + line.length;
+            const trimmed = line.trim();
+            const isTerminator = QUERY_TERMINATOR_LINE.test(trimmed)
+                && !inBlockComment
+                && !inSingleQuote
+                && !inQQuote;
+
+            if (isTerminator) {
+                const statementSql = source.substring(statementStart, lineStart).trim();
+                if (statementSql) {
+                    statements.push({
+                        startOffset: statementStart,
+                        endOffset: lineStart,
+                        sqlText: statementSql
+                    });
+                }
+                statementStart = Math.min(source.length, lineEnd + 1);
+                offset = lineEnd + 1;
+                return;
+            }
+
+            for (let i = 0; i < line.length; i++) {
+                const current = line.charAt(i);
+                const next = line.charAt(i + 1);
+                const third = line.charAt(i + 2);
+
+                if (inBlockComment) {
+                    if (current === '*' && next === '/') {
+                        inBlockComment = false;
+                        i++;
+                    }
+                    continue;
+                }
+
+                if (inSingleQuote) {
+                    if (current === '\'') {
+                        if (next === '\'') {
+                            i++;
+                        } else {
+                            inSingleQuote = false;
+                        }
+                    }
+                    continue;
+                }
+
+                if (inQQuote) {
+                    if (current === qQuoteCloser && next === '\'') {
+                        inQQuote = false;
+                        qQuoteCloser = '';
+                        i++;
+                    }
+                    continue;
+                }
+
+                if (current === '-' && next === '-') {
+                    break;
+                }
+
+                if (current === '/' && next === '*') {
+                    inBlockComment = true;
+                    i++;
+                    continue;
+                }
+
+                if ((current === 'q' || current === 'Q') && next === '\'' && third) {
+                    inQQuote = true;
+                    qQuoteCloser = matchingQQuoteDelimiter(third);
+                    i += 2;
+                    continue;
+                }
+
+                if (current === '\'') {
+                    inSingleQuote = true;
+                }
+            }
+
+            offset = lineEnd + 1;
         });
-    }
 
-    function getCurrentSelectedQueryBlockName() {
-        if (activeQueryBlockIndex < 0 || activeQueryBlockIndex >= parsedQueryBlocks.length) {
-            return '';
-        }
-        return parsedQueryBlocks[activeQueryBlockIndex].name;
-    }
-
-    function setActiveQueryBlock(index, focusEditor) {
-        if (!parsedQueryBlocks.length) {
-            activeQueryBlockIndex = -1;
-            queryBlockSelect.value = '';
-            return;
-        }
-        const safeIndex = Number.isInteger(index) && index >= 0 && index < parsedQueryBlocks.length ? index : 0;
-        activeQueryBlockIndex = safeIndex;
-        queryBlockSelect.value = String(safeIndex);
-        if (focusEditor) {
-            const block = parsedQueryBlocks[safeIndex];
-            if (block) {
-                sqlEditor.focus();
-                sqlEditor.setSelectionRange(block.startOffset, block.endOffset);
+        if (statementStart < source.length) {
+            const statementSql = source.substring(statementStart).trim();
+            if (statementSql) {
+                statements.push({
+                    startOffset: statementStart,
+                    endOffset: source.length,
+                    sqlText: statementSql
+                });
             }
         }
+
+        return statements;
     }
 
-    function refreshQueryBlockSelector(preferredBlockName) {
-        parsedQueryBlocks = parseQueryBlocks(sqlEditor.value || '');
-        if (!parsedQueryBlocks.length) {
-            activeQueryBlockIndex = -1;
-            queryBlockSelect.innerHTML = '<option value="">Script completo</option>';
-            queryBlockSelect.value = '';
-            queryBlockSelect.disabled = true;
-            queryBlockHint.textContent = 'Usa `-- @query: nome` per definire blocchi eseguibili uno alla volta.';
-            return;
+    function getExecutableStatementAtCursor() {
+        const source = sqlEditor.value || '';
+        const cursor = Math.max(0, Math.min(sqlEditor.selectionStart || 0, source.length));
+        const statements = parseOracleStatements(source);
+
+        if (!statements.length) {
+            const trimmed = source.trim();
+            return trimmed ? {
+                startOffset: 0,
+                endOffset: source.length,
+                sqlText: trimmed
+            } : null;
         }
 
-        const options = parsedQueryBlocks.map((block, idx) => (
-            '<option value="' + idx + '">' + escapeHtml(block.name) + '</option>'
-        ));
-        queryBlockSelect.innerHTML = options.join('');
-        queryBlockSelect.disabled = false;
-        queryBlockHint.textContent = 'Esecuzione limitata al blocco selezionato.';
+        const exact = statements.find((statement) => cursor >= statement.startOffset && cursor <= statement.endOffset);
+        if (exact) {
+            return exact;
+        }
 
-        const targetName = (preferredBlockName || '').trim();
-        const targetIndex = targetName
-            ? parsedQueryBlocks.findIndex((block) => block.name === targetName)
-            : -1;
-        setActiveQueryBlock(targetIndex >= 0 ? targetIndex : 0, false);
+        for (let i = statements.length - 1; i >= 0; i--) {
+            if (statements[i].startOffset <= cursor) {
+                return statements[i];
+            }
+        }
+
+        return statements[0];
     }
 
     function getEffectiveSqlText() {
-        if (activeQueryBlockIndex < 0 || activeQueryBlockIndex >= parsedQueryBlocks.length) {
-            return (sqlEditor.value || '').trim();
-        }
-        return (parsedQueryBlocks[activeQueryBlockIndex].sqlText || '').trim();
+        const statement = getExecutableStatementAtCursor();
+        return statement ? statement.sqlText : '';
     }
 
     function stripLeadingCommentsAndSeparators(sqlText) {
@@ -1305,6 +1376,11 @@
                 sql = endComment >= 0 ? sql.substring(endComment + 2).trimStart() : '';
                 continue;
             }
+            if (QUERY_TERMINATOR_LINE.test(sql.split('\n', 1)[0].trim())) {
+                const newline = sql.indexOf('\n');
+                sql = newline >= 0 ? sql.substring(newline + 1).trimStart() : '';
+                continue;
+            }
             if (sql.startsWith(';')) {
                 sql = sql.substring(1).trimStart();
                 continue;
@@ -1314,8 +1390,9 @@
         return sql;
     }
 
-    function syncBindParamsFromSql() {
-        const matches = getEffectiveSqlText().match(/:[a-zA-Z_]\w*/g);
+    function syncBindParamsFromSql(sqlText) {
+        const source = (typeof sqlText === 'string' ? sqlText : getEffectiveSqlText()) || '';
+        const matches = source.match(/:[a-zA-Z_]\w*/g);
         const params = [];
         const seen = new Set();
 
@@ -1442,15 +1519,13 @@
         const text = sqlEditor.value;
         const before = text.substring(0, suggestContext.start);
         const after = text.substring(suggestContext.end);
-        const needsSpace = after.length > 0 && !/^\s|[,);]/.test(after.charAt(0));
-        const insert = selected + (needsSpace ? ' ' : ' ');
+        const insert = selected + ' ';
 
         sqlEditor.value = before + insert + after;
         const newCaret = before.length + insert.length;
         sqlEditor.selectionStart = newCaret;
         sqlEditor.selectionEnd = newCaret;
         updateLineNumbers();
-        refreshQueryBlockSelector(getCurrentSelectedQueryBlockName());
         syncBindParamsFromSql();
         hideSuggestions();
         saveCurrentConnectionDraft();
@@ -1469,17 +1544,27 @@
     });
 
     sqlEditor.addEventListener('input', () => {
-        const selectedBlockName = getCurrentSelectedQueryBlockName();
         updateLineNumbers();
-        refreshQueryBlockSelector(selectedBlockName);
         syncBindParamsFromSql();
         refreshSuggestions();
+        saveCurrentConnectionDraft();
+    });
+    sqlEditor.addEventListener('keyup', () => {
+        syncBindParamsFromSql();
+        saveCurrentConnectionDraft();
+    });
+    sqlEditor.addEventListener('mouseup', () => {
+        syncBindParamsFromSql();
         saveCurrentConnectionDraft();
     });
     sqlEditor.addEventListener('scroll', () => {
         lineNumbers.scrollTop = sqlEditor.scrollTop;
     });
-    sqlEditor.addEventListener('click', refreshSuggestions);
+    sqlEditor.addEventListener('click', () => {
+        refreshSuggestions();
+        syncBindParamsFromSql();
+        saveCurrentConnectionDraft();
+    });
     sqlEditor.addEventListener('blur', () => {
         setTimeout(() => {
             if (document.activeElement !== sqlEditor) {
@@ -1524,7 +1609,6 @@
             sqlEditor.value = sqlEditor.value.substring(0, start) + '    ' + sqlEditor.value.substring(end);
             sqlEditor.selectionStart = sqlEditor.selectionEnd = start + 4;
             updateLineNumbers();
-            refreshQueryBlockSelector('');
             syncBindParamsFromSql();
             refreshSuggestions();
             saveCurrentConnectionDraft();
@@ -1549,7 +1633,8 @@
             btnUpdate.disabled = true;
             document.getElementById('updateSelectedScript').value = '';
             updateLineNumbers();
-            refreshQueryBlockSelector('');
+            sqlEditor.selectionStart = 0;
+            sqlEditor.selectionEnd = 0;
             syncBindParamsFromSql();
             hideMsg();
             saveCurrentConnectionDraft();
@@ -1562,7 +1647,8 @@
                 currentBadge.textContent = name;
                 saveNameInput.value = name;
                 updateLineNumbers();
-                refreshQueryBlockSelector('');
+                sqlEditor.selectionStart = 0;
+                sqlEditor.selectionEnd = 0;
                 syncBindParamsFromSql();
                 hideMsg();
                 // Aggiorna pulsante Update
@@ -1710,16 +1796,15 @@
     btnRun.addEventListener('click', async () => {
         const sql = getEffectiveSqlText();
         if (!sql) {
-            showMsg(activeQueryBlockIndex >= 0 ? 'La query selezionata è vuota.' : 'Inserisci una query SQL.', false);
+            showMsg('Posiziona il cursore dentro una query SQL.', false);
             return;
         }
 
-        // Verifica che la query sia eseguibile
-        const allowedKeywords = ['SELECT', 'WITH', 'INSERT', 'UPDATE'];
         const normalizedSql = stripLeadingCommentsAndSeparators(sql);
+        const allowedKeywords = ['SELECT', 'WITH', 'INSERT', 'UPDATE', 'DELETE', 'MERGE', 'GRANT', 'REVOKE', 'BEGIN', 'DECLARE', 'CALL', 'EXECUTE', 'EXEC'];
         const isExecutable = allowedKeywords.some(keyword => normalizedSql.toUpperCase().startsWith(keyword));
         if (!isExecutable) {
-            showMsg('Solo query SELECT, WITH, INSERT e UPDATE possono essere eseguite.', false);
+            showMsg('Solo istruzioni Oracle eseguibili possono essere lanciate da questo pulsante.', false);
             return;
         }
 
@@ -1822,13 +1907,6 @@
 
     queryParams.addEventListener('input', () => {
         saveCurrentConnectionDraft();
-    });
-
-    queryBlockSelect.addEventListener('change', () => {
-    const idx = Number(queryBlockSelect.value);
-    setActiveQueryBlock(Number.isFinite(idx) ? idx : 0, true);
-    syncBindParamsFromSql();
-    saveCurrentConnectionDraft();
     });
 
     saveNameInput.addEventListener('input', () => {
@@ -2124,7 +2202,7 @@
             queryLabel: queryLabelInput.value || '',
             queryParams: queryParams.value || '',
             saveName: saveNameInput.value || '',
-            queryBlockName: getCurrentSelectedQueryBlockName(),
+            cursorPosition: sqlEditor.selectionStart || 0,
             updatedAt: Date.now()
         };
         saveConnectionDraftsMap(drafts);
@@ -2142,7 +2220,11 @@
         queryParams.value = draft.queryParams || '';
         saveNameInput.value = draft.saveName || '';
         updateLineNumbers();
-        refreshQueryBlockSelector(draft.queryBlockName || '');
+        const cursorPosition = Number.isInteger(draft.cursorPosition) ? draft.cursorPosition : 0;
+        const safeCursor = Math.max(0, Math.min(cursorPosition, sqlEditor.value.length));
+        sqlEditor.selectionStart = safeCursor;
+        sqlEditor.selectionEnd = safeCursor;
+        syncBindParamsFromSql();
         hideSuggestions();
     }
 
@@ -2174,6 +2256,18 @@
         connectionPanel.classList.toggle('collapsed', collapsed);
         btnToggleConnectionPanel.textContent = collapsed ? 'Apri' : 'Chiudi';
         btnToggleConnectionPanel.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+    }
+
+    function setSchemaSidebarCollapsed(collapsed, persist) {
+        if (!schemaSidebar || !btnToggleSchemaSidebar) {
+            return;
+        }
+        schemaSidebar.classList.toggle('collapsed', collapsed);
+        btnToggleSchemaSidebar.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        btnToggleSchemaSidebar.title = collapsed ? 'Espandi schema' : 'Collassa schema';
+        if (persist !== false) {
+            localStorage.setItem(SCHEMA_SIDEBAR_COLLAPSED_KEY, collapsed ? 'true' : 'false');
+        }
     }
 
     function renderConnectionProfilesSelect() {
@@ -2361,6 +2455,14 @@
         const isCollapsed = connectionPanel.classList.contains('collapsed');
         setConnectionPanelCollapsed(!isCollapsed);
     });
+    if (schemaSidebar && btnToggleSchemaSidebar) {
+        const schemaCollapsed = localStorage.getItem(SCHEMA_SIDEBAR_COLLAPSED_KEY) === 'true';
+        setSchemaSidebarCollapsed(schemaCollapsed, false);
+        btnToggleSchemaSidebar.addEventListener('click', () => {
+            const isCollapsed = schemaSidebar.classList.contains('collapsed');
+            setSchemaSidebarCollapsed(!isCollapsed);
+        });
+    }
     connProfileSelect.addEventListener('change', applySavedProfile);
 
     // ── Schema sidebar (load all schema objects) ─────────────────────────────────
