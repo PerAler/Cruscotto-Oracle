@@ -107,23 +107,28 @@
         #sqlHighlight {
             position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
-            padding: 0.75rem 0.75rem;
+            padding: 0;
             margin: 0;
             border: none;
             font-family: inherit;
             font-size: inherit;
             line-height: inherit;
-            tab-size: 4;
-            white-space: pre;
-            overflow-wrap: normal;
-            overflow: auto;
+            overflow: hidden;
             pointer-events: none;
             background: transparent;
             color: #c5c8c6;
             z-index: 0;
-            scrollbar-width: none;
         }
-        #sqlHighlight::-webkit-scrollbar { display: none; }
+
+        #sqlHighlightInner {
+            display: inline-block;
+            min-width: 100%;
+            padding: 0.75rem 0.75rem;
+            white-space: pre;
+            overflow-wrap: normal;
+            tab-size: 4;
+            will-change: transform;
+        }
 
         .hl-kw   { color: #81a2be; }
         .hl-plkw { color: #b294bb; }
@@ -1155,7 +1160,7 @@
         <div class="sql-editor-wrap" id="editorWrap">
             <div class="line-numbers" id="lineNumbers">1</div>
             <div class="sql-edit-area">
-                <pre id="sqlHighlight" aria-hidden="true"></pre>
+                <pre id="sqlHighlight" aria-hidden="true"><div id="sqlHighlightInner"></div></pre>
                 <textarea id="sqlEditor"
                           spellcheck="false"
                           autocorrect="off"
@@ -1327,7 +1332,14 @@
     }
 
     // ── Syntax highlighting ──────────────────────────────────────────────────
-    const sqlHighlight = document.getElementById('sqlHighlight');
+    const sqlHighlight      = document.getElementById('sqlHighlight');
+    const sqlHighlightInner = document.getElementById('sqlHighlightInner');
+
+    function syncHighlightScroll() {
+        if (!sqlHighlightInner) return;
+        sqlHighlightInner.style.transform =
+            `translate(${-sqlEditor.scrollLeft}px, ${-sqlEditor.scrollTop}px)`;
+    }
 
     const HL_SQL_KW = /\b(SELECT|FROM|WHERE|HAVING|GROUP\s+BY|ORDER\s+BY|PARTITION\s+BY|CONNECT\s+BY|START\s+WITH|JOIN|LEFT|RIGHT|INNER|OUTER|FULL|CROSS|NATURAL|ON|AS|UNION|ALL|DISTINCT|INSERT|INTO|VALUES|UPDATE|SET|DELETE|MERGE|WITH|OVER|CREATE|ALTER|DROP|GRANT|REVOKE|COMMIT|ROLLBACK|SAVEPOINT|FETCH|ROWS|ONLY|FIRST|NEXT|EXISTS|IN|LIKE|BETWEEN|IS|NULL|AND|OR|NOT|CASE|WHEN|THEN|ELSE|END|ROWNUM|ROWID|LEVEL|PRIOR)\b/gi;
     const HL_PLSQL_KW = /\b(BEGIN|DECLARE|EXCEPTION|RAISE|RAISE_APPLICATION_ERROR|RETURN|IF|ELSIF|LOOP|WHILE|FOR|EXIT|CURSOR|OPEN|CLOSE|PROCEDURE|FUNCTION|PACKAGE\s+BODY|PACKAGE|TRIGGER|EXECUTE|TRUE|FALSE|PRAGMA)\b/gi;
@@ -1403,12 +1415,11 @@
 
     let hlRafId = null;
     function scheduleHighlight() {
-        if (!sqlHighlight) return;
+        if (!sqlHighlightInner) return;
         if (hlRafId) cancelAnimationFrame(hlRafId);
         hlRafId = requestAnimationFrame(() => {
-            sqlHighlight.innerHTML = hlBuild(sqlEditor.value);
-            sqlHighlight.scrollTop  = sqlEditor.scrollTop;
-            sqlHighlight.scrollLeft = sqlEditor.scrollLeft;
+            sqlHighlightInner.innerHTML = hlBuild(sqlEditor.value);
+            syncHighlightScroll();
             hlRafId = null;
         });
     }
@@ -1825,8 +1836,7 @@
     sqlEditor.addEventListener('scroll', () => {
         lineNumbers.scrollTop = sqlEditor.scrollTop;
         if (sqlHighlight) {
-            sqlHighlight.scrollTop  = sqlEditor.scrollTop;
-            sqlHighlight.scrollLeft = sqlEditor.scrollLeft;
+            syncHighlightScroll();
         }
     });
     sqlEditor.addEventListener('click', () => {
