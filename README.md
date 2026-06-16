@@ -6,7 +6,7 @@ Applicazione web Spring Boot 3 per la gestione, esecuzione e monitoraggio di scr
 
 ## Changelog
 
-### v1.3.0 (2026-06-16)
+### v1.4.0 (2026-06-16)
 - **[CHANGED] UX pannello connessioni nello schema sidebar**
   - Pannello connessioni collassato di default per liberare spazio al browser schema
   - Combo profili connessione sempre visibile con pulsante Apri/Chiudi
@@ -17,6 +17,13 @@ Applicazione web Spring Boot 3 per la gestione, esecuzione e monitoraggio di scr
   - L'editor esegue il blocco sotto il cursore
   - Ogni query termina con una riga contenente solo `/`
   - Parametri bind e bozza editor si allineano alla query corrente
+- **[NEW] Lettura e compilazione oggetti Oracle**
+  - Caricamento sorgente da schema browser per procedure, function, package, package body e view
+  - Pulsante compilazione sul sorgente corrente nell'editor
+- **[CHANGED] Editor multi-tab per connessione**
+  - Nuovi tab editor aggiungibili senza ricaricare i comandi
+  - Ogni connessione conserva in RAM i suoi editor fino alla chiusura del tab connessione o del tab editor
+  - Doppio click nello schema browser carica il sorgente nel tab editor attivo
 
 ### v1.2.0 (2026-06-15)
 - **[NEW] Profili connessione persistenti lato server**
@@ -65,6 +72,8 @@ Applicazione web Spring Boot 3 per la gestione, esecuzione e monitoraggio di scr
 - Ricarica catalogo da disco senza riavvio
 - **Esegui** — AJAX con spinner, risultati visualizzati in iframe inline
 - **Esegui** — AJAX con spinner, esegue la query sotto il cursore; i blocchi terminano con `/` su una riga singola
+- **Editor multi-tab** — più finestre di editor per ogni connessione, stato solo temporaneo in RAM
+- **Compila oggetto** — esegue il DDL corrente nell'editor
 - **Vista risultati** con toggle densità (compatta / estesa) e toggle larghezza colonne
 - **Salva nuovo** / **Aggiorna script selezionato** (POST form)
 - Estrazione automatica parametri bind
@@ -98,10 +107,12 @@ Applicazione web Spring Boot 3 per la gestione, esecuzione e monitoraggio di scr
 | `/editor/save` | POST | Salva script dall'editor |
 | `/editor/update` | POST | Aggiorna script dall'editor |
 | `/editor/load-script` | GET | Carica script (AJAX, ritorna JSON) |
+| `/editor/compile` | POST | Compila il DDL corrente nell'editor |
 | `/api/connections` | GET | Elenco connessioni Oracle aperte |
 | `/api/connections/open` | POST | Apre una nuova connessione Oracle |
 | `/api/connections/activate` | POST | Imposta la connessione attiva |
 | `/api/connections/close` | POST | Chiude una connessione Oracle |
+| `/api/schema/object-source` | GET | Legge il sorgente Oracle dell'oggetto selezionato |
 | `/catalog/reload` | POST | Ricarica catalogo da disco |
 | `/xlsx-import` | GET | Pagina importazione XLSX |
 | `/xlsx-import/analyze` | POST | Analizza file XLSX caricato |
@@ -159,7 +170,7 @@ SELECT * FROM fatture WHERE anno = :anno AND stato = :stato
 ```bash
 cd C:\Temp\Cruscotto_Oracle
 mvn clean package -DskipTests
-java -jar target\cruscotto-oracle-1.2.0.war
+java -jar target\cruscotto-oracle-1.4.0.war
 ```
 Apri `http://localhost:8090`.
 

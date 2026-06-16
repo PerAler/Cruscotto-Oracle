@@ -4,6 +4,6 @@ import java.util.List;
 
 public record SchemaObject(
     String name,
-    String type,  // TABLE o VIEW
+    String type,
     List<String> columns
 ) {}

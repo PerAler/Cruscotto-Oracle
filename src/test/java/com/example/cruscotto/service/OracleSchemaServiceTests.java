@@ -76,4 +76,34 @@ class OracleSchemaServiceTests {
         List<SchemaObject> otherObjects = service.getSchemaObjectsForGroup("OTHER OBJECTS");
         assertTrue(otherObjects.isEmpty());
     }
+
+    @Test
+    void loadsObjectSourceThroughDbmsMetadata() {
+        OracleConnectionManager connectionManager = mock(OracleConnectionManager.class);
+        NamedParameterJdbcTemplate namedParameterJdbcTemplate = mock(NamedParameterJdbcTemplate.class);
+        OracleConnectionInfo info = new OracleConnectionInfo(
+                "conn-1",
+                "local",
+                "dbserver:1521:ORCL",
+                "jdbc:oracle:thin:@//host:1521/service",
+                "user",
+                "ALER",
+                Instant.now()
+        );
+        OracleConnectionManager.ResolvedConnection resolved = new OracleConnectionManager.ResolvedConnection(
+                info,
+                null,
+                namedParameterJdbcTemplate
+        );
+        when(connectionManager.resolveConnection(null)).thenReturn(resolved);
+        when(namedParameterJdbcTemplate.queryForObject(contains("DBMS_METADATA.GET_DDL"), anyMap(), eq(String.class)))
+                .thenReturn("CREATE OR REPLACE PROCEDURE TEST_PROC AS BEGIN NULL; END;");
+
+        OracleSchemaService service = new OracleSchemaService(connectionManager);
+
+        var source = service.getSchemaObjectSource(null, "PROCEDURE", "TEST_PROC");
+
+        assertTrue(source.isPresent());
+        assertTrue(source.get().startsWith("CREATE OR REPLACE PROCEDURE TEST_PROC"));
+    }
 }

@@ -450,6 +450,64 @@
             line-height: 1;
         }
 
+        .editor-tabs-row {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+            margin: 0.25rem 0 0.7rem;
+            flex-wrap: wrap;
+        }
+
+        .editor-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.3rem;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .editor-tab {
+            border: 1px solid #b8d8e8;
+            background: #f4fafc;
+            color: #0d4f67;
+            border-radius: 14px;
+            padding: 0.25rem 0.65rem;
+            font-size: 0.72rem;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            max-width: 100%;
+        }
+
+        .editor-tab.active {
+            background: #0ea5c6;
+            border-color: #0e91af;
+            color: #fff;
+        }
+
+        .editor-tab .tab-title {
+            max-width: 18rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .editor-tab .close-btn {
+            border: none;
+            background: transparent;
+            color: inherit;
+            cursor: pointer;
+            padding: 0;
+            font-size: 0.75rem;
+            line-height: 1;
+        }
+
+        .btn-new-editor {
+            padding: 0.3rem 0.65rem;
+            font-size: 0.78rem;
+        }
+
         .schema-search {
             flex-shrink: 0;
             padding: 0.5rem;
@@ -1012,6 +1070,8 @@
         <!-- ── Card principale editor ─────────────────────────────────────────── -->
         <div class="editor-main">
             <section class="card">
+                <input type="hidden" id="selectedSchemaObjectName">
+                <input type="hidden" id="selectedSchemaObjectType">
 
         <!-- Header card -->
         <div class="page-header" style="margin-bottom:0.8rem">
@@ -1023,6 +1083,10 @@
             <a href="/utility" class="nav-back" target="_blank" rel="noopener">↗ Apri Utility</a>
         </div>
         <div id="connectionTabs" class="connection-tabs connection-tabs-main"></div>
+        <div class="editor-tabs-row">
+            <div id="editorTabs" class="editor-tabs"></div>
+            <button class="btn btn-sec btn-new-editor" id="btnNewEditor" type="button">＋ Nuovo editor</button>
+        </div>
 
         <!-- Barra selezione script -->
         <div class="editor-topbar" style="margin-bottom:0.8rem">
@@ -1086,6 +1150,7 @@
                 ▶ Esegui
             </button>
             <button class="btn btn-sec" id="btnFormatSql" type="button" title="Formatta il testo SQL/PL-SQL con indentazione e keyword uppercase">⟳ Formatta SQL/PL-SQL</button>
+            <button class="btn btn-upd" id="btnCompileObject" type="button" title="Compila il sorgente Oracle corrente">⚙ Compila oggetto</button>
             <div class="spacer"></div>
 
             <!-- Salva come nuovo script -->
@@ -1148,11 +1213,15 @@
     const runSpinner      = document.getElementById('runSpinner');
     const btnLoad         = document.getElementById('btnLoad');
     const btnReloadCatalog= document.getElementById('btnReloadCatalog');
+    const btnCompileObject = document.getElementById('btnCompileObject');
+    const btnNewEditor    = document.getElementById('btnNewEditor');
     const btnSave         = document.getElementById('btnSave');
     const btnUpdate       = document.getElementById('btnUpdate');
     const saveNameInput   = document.getElementById('saveNameInput');
     const queryLabelInput = document.getElementById('queryLabel');
     const queryParams     = document.getElementById('queryParams');
+    const selectedSchemaObjectNameInput = document.getElementById('selectedSchemaObjectName');
+    const selectedSchemaObjectTypeInput = document.getElementById('selectedSchemaObjectType');
     const resultPanel     = document.getElementById('resultPanel');
     const resultFrame     = document.getElementById('resultFrame');
     const resultMsg       = document.getElementById('resultMsg');
@@ -1168,6 +1237,7 @@
     const headerSubtitle = document.querySelector('header.hero .hero-subtitle');
     const headerRuntime = document.querySelector('header.hero .hero-runtime');
     const connectionTabs = document.getElementById('connectionTabs');
+    const editorTabs = document.getElementById('editorTabs');
     const connectionPanel = document.getElementById('connectionPanel');
     const btnToggleConnectionPanel = document.getElementById('btnToggleConnectionPanel');
     const schemaSidebar = document.getElementById('schemaSidebar');
@@ -1179,11 +1249,10 @@
     const connPassword = document.getElementById('connPassword');
     const connSchema = document.getElementById('connSchema');
     const connProfileSelect = document.getElementById('connProfileSelect');
-    const CONNECTION_EDITOR_DRAFTS_KEY = 'cruscotto.connectionEditorDrafts';
-    const DEFAULT_DRAFT_KEY = '__no_connection__';
     const RESULT_DENSITY_KEY = 'cruscotto.result.tableDensity';
     const RESULT_COLUMN_WRAP_KEY = 'cruscotto.result.columnWrap';
     const SCHEMA_SIDEBAR_COLLAPSED_KEY = 'cruscotto.schemaSidebarCollapsed';
+    const DEFAULT_EDITOR_ID = 'editor-1';
     const QUERY_TERMINATOR_LINE = /^\s*\/\s*$/;
     let resultDensity = localStorage.getItem(RESULT_DENSITY_KEY) || 'comfortable';
     let resultColumnWrap = localStorage.getItem(RESULT_COLUMN_WRAP_KEY) === 'true';
@@ -1202,6 +1271,7 @@
     let suggestIndex = -1;
     let suggestContext = null;
     let savedConnectionProfiles = [];
+    let connectionEditorState = {};
 
     // ── Numeri di riga ───────────────────────────────────────────────────────
     function updateLineNumbers() {
@@ -1407,6 +1477,22 @@
         }
 
         queryParams.value = params.join('\n');
+    }
+
+    function setSelectedSchemaObject(objectName, objectType) {
+        if (selectedSchemaObjectNameInput) {
+            selectedSchemaObjectNameInput.value = objectName || '';
+        }
+        if (selectedSchemaObjectTypeInput) {
+            selectedSchemaObjectTypeInput.value = objectType || '';
+        }
+    }
+
+    function getSelectedSchemaObject() {
+        return {
+            objectName: (selectedSchemaObjectNameInput ? selectedSchemaObjectNameInput.value : '').trim(),
+            objectType: (selectedSchemaObjectTypeInput ? selectedSchemaObjectTypeInput.value : '').trim()
+        };
     }
 
     function escapeHtml(text) {
@@ -1627,11 +1713,13 @@
         const name = scriptSelect.value;
         if (!name) {
             sqlEditor.value = '';
+            scriptSelect.value = '';
             queryLabelInput.value = '';
             currentBadge.textContent = '(nuovo)';
             saveNameInput.value = '';
             btnUpdate.disabled = true;
             document.getElementById('updateSelectedScript').value = '';
+            setSelectedSchemaObject('', '');
             updateLineNumbers();
             sqlEditor.selectionStart = 0;
             sqlEditor.selectionEnd = 0;
@@ -1644,8 +1732,10 @@
             .then(r => r.ok ? r.json() : Promise.reject('Errore HTTP ' + r.status))
             .then(data => {
                 sqlEditor.value = data.sqlText || '';
+                scriptSelect.value = name;
                 currentBadge.textContent = name;
                 saveNameInput.value = name;
+                setSelectedSchemaObject('', '');
                 updateLineNumbers();
                 sqlEditor.selectionStart = 0;
                 sqlEditor.selectionEnd = 0;
@@ -1871,6 +1961,17 @@
         document.getElementById('formUpdate').submit();
     });
 
+    if (btnNewEditor) {
+        btnNewEditor.addEventListener('click', () => {
+            const connectionId = getActiveConnectionId();
+            if (!connectionId) {
+                showMsg('Apri una connessione Oracle prima di creare un editor.', false);
+                return;
+            }
+            createNewEditorForConnection(connectionId);
+        });
+    }
+
     // ── Chiudi risultati ─────────────────────────────────────────────────────
     btnCloseResult.addEventListener('click', () => {
         resultPanel.style.display = 'none';
@@ -1910,6 +2011,10 @@
     });
 
     saveNameInput.addEventListener('input', () => {
+        saveCurrentConnectionDraft();
+    });
+
+    scriptSelect.addEventListener('change', () => {
         saveCurrentConnectionDraft();
     });
 
@@ -2078,6 +2183,97 @@
         document.body.classList.toggle('is-busy', busy);
     }
 
+    async function loadSelectedSchemaObjectSource() {
+        const selected = getSelectedSchemaObject();
+        if (!selected.objectName || !selected.objectType) {
+            showMsg('Seleziona prima un oggetto schema.', false);
+            return;
+        }
+
+        const connectionId = getActiveConnectionId();
+        if (!connectionId) {
+            showMsg('Apri una connessione Oracle prima di leggere il sorgente.', false);
+            return;
+        }
+
+        try {
+            const url = '/api/schema/object-source?connectionId=' + encodeURIComponent(connectionId)
+                + '&objectType=' + encodeURIComponent(selected.objectType)
+                + '&objectName=' + encodeURIComponent(selected.objectName);
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
+            const data = await response.json();
+            if (!data.ok) {
+                throw new Error(data.message || 'Sorgente non disponibile');
+            }
+
+            sqlEditor.value = data.sqlText || '';
+            scriptSelect.value = '';
+            queryLabelInput.value = selected.objectType + ' ' + selected.objectName;
+            saveNameInput.value = selected.objectName;
+            currentBadge.textContent = selected.objectType + ' ' + selected.objectName;
+            btnUpdate.disabled = true;
+            const updateSelectedScript = document.getElementById('updateSelectedScript');
+            if (updateSelectedScript) {
+                updateSelectedScript.value = '';
+            }
+            updateLineNumbers();
+            sqlEditor.selectionStart = 0;
+            sqlEditor.selectionEnd = 0;
+            syncBindParamsFromSql();
+            hideSuggestions();
+            saveCurrentConnectionDraft();
+            showMsg('Sorgente caricato: ' + selected.objectType + ' ' + selected.objectName, true);
+            sqlEditor.focus();
+        } catch (err) {
+            showMsg('Errore lettura sorgente: ' + err.message, false);
+        }
+    }
+
+    async function compileCurrentEditorObject() {
+        const sql = (sqlEditor.value || '').trim();
+        if (!sql) {
+            showMsg('Inserisci o carica prima il sorgente da compilare.', false);
+            return;
+        }
+
+        const connectionId = getActiveConnectionId();
+        if (!connectionId) {
+            showMsg('Apri una connessione Oracle prima di compilare.', false);
+            return;
+        }
+
+        if (btnCompileObject) {
+            btnCompileObject.disabled = true;
+        }
+
+        try {
+            const fd = new FormData();
+            fd.append('sqlText', sqlEditor.value);
+            fd.append('queryLabel', queryLabelInput.value || saveNameInput.value || 'DDL Editor');
+            fd.append('connectionId', connectionId);
+
+            const response = await fetch('/editor/compile', { method: 'POST', body: fd });
+            if (!response.ok) {
+                throw new Error('HTTP ' + response.status);
+            }
+            const data = await response.json();
+            if (!data.ok) {
+                throw new Error(data.message || 'Compilazione fallita');
+            }
+
+            showMsg(data.message || 'Oggetto compilato con successo', true);
+        } catch (err) {
+            showMsg('Errore compilazione: ' + err.message, false);
+        } finally {
+            if (btnCompileObject) {
+                btnCompileObject.disabled = false;
+            }
+        }
+    }
+
     function setScriptLibraryScope(connectionLabel) {
         if (!scriptLibraryScope) {
             return;
@@ -2169,72 +2365,225 @@
         activeConnectionIdInput.value = connectionId || '';
     }
 
-    function getCurrentDraftKey(connectionId) {
-        const key = (connectionId || getActiveConnectionId() || '').trim();
-        return key || DEFAULT_DRAFT_KEY;
+    function getConnectionEditorKey(connectionId) {
+        return (connectionId || getActiveConnectionId() || '').trim();
     }
 
-    function loadConnectionDraftsMap() {
-        try {
-            const raw = localStorage.getItem(CONNECTION_EDITOR_DRAFTS_KEY);
-            if (!raw) {
-                return {};
-            }
-            const parsed = JSON.parse(raw);
-            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-                return {};
-            }
-            return parsed;
-        } catch (e) {
-            return {};
+    function createEditorDocument(index) {
+        const safeIndex = Number.isInteger(index) && index > 0 ? index : 1;
+        return {
+            id: 'editor-' + safeIndex + '-' + Date.now(),
+            title: 'Editor ' + safeIndex,
+            sqlText: '',
+            selectedScript: '',
+            queryLabel: '',
+            queryParams: '',
+            saveName: '',
+            selectedSchemaObjectName: '',
+            selectedSchemaObjectType: '',
+            cursorPosition: 0,
+            updatedAt: Date.now()
+        };
+    }
+
+    function createConnectionEditorState(seedFromDom) {
+        const initialSql = seedFromDom ? (sqlEditor.value || '') : '';
+        const initialScript = seedFromDom && currentBadge ? (currentBadge.textContent || '').trim() : '';
+        return {
+            editors: [Object.assign(createEditorDocument(1), {
+                sqlText: initialSql,
+                selectedScript: initialScript && initialScript !== '(nuovo)' ? initialScript : ''
+            })],
+            activeEditorId: null
+        };
+    }
+
+    function getConnectionEditorState(connectionId, createIfMissing = true, seedFromDom = false) {
+        const key = getConnectionEditorKey(connectionId);
+        if (!key) {
+            return null;
         }
+        if (!connectionEditorState[key] && createIfMissing) {
+            connectionEditorState[key] = createConnectionEditorState(seedFromDom);
+        }
+        const state = connectionEditorState[key];
+        if (!state) {
+            return null;
+        }
+        if (!Array.isArray(state.editors) || !state.editors.length) {
+            state.editors = [createEditorDocument(1)];
+        }
+        if (!state.activeEditorId || !state.editors.some((doc) => doc.id === state.activeEditorId)) {
+            state.activeEditorId = state.editors[0].id;
+        }
+        return state;
     }
 
-    function saveConnectionDraftsMap(map) {
-        localStorage.setItem(CONNECTION_EDITOR_DRAFTS_KEY, JSON.stringify(map));
+    function getActiveEditorDocument(connectionId) {
+        const state = getConnectionEditorState(connectionId, false);
+        if (!state) {
+            return null;
+        }
+        return state.editors.find((doc) => doc.id === state.activeEditorId) || state.editors[0] || null;
+    }
+
+    function updateEditorTitleFromDocument(doc, index) {
+        if (!doc) {
+            return;
+        }
+        const fallback = 'Editor ' + (Number.isInteger(index) && index > 0 ? index : 1);
+        const label = (doc.selectedScript || doc.saveName || doc.queryLabel || '').trim();
+        doc.title = label ? label : fallback;
     }
 
     function saveCurrentConnectionDraft(connectionId) {
-        const drafts = loadConnectionDraftsMap();
-        const key = getCurrentDraftKey(connectionId);
-        drafts[key] = {
-            sqlText: sqlEditor.value || '',
-            queryLabel: queryLabelInput.value || '',
-            queryParams: queryParams.value || '',
-            saveName: saveNameInput.value || '',
-            cursorPosition: sqlEditor.selectionStart || 0,
-            updatedAt: Date.now()
-        };
-        saveConnectionDraftsMap(drafts);
-    }
-
-    function applyConnectionDraft(connectionId) {
-        const drafts = loadConnectionDraftsMap();
-        const key = getCurrentDraftKey(connectionId);
-        const draft = drafts[key];
-        if (!draft) {
+        const key = getConnectionEditorKey(connectionId);
+        if (!key) {
             return;
         }
-        sqlEditor.value = draft.sqlText || '';
-        queryLabelInput.value = draft.queryLabel || '';
-        queryParams.value = draft.queryParams || '';
-        saveNameInput.value = draft.saveName || '';
+        const state = getConnectionEditorState(key, true);
+        const activeEditor = state.editors.find((doc) => doc.id === state.activeEditorId) || state.editors[0];
+        if (!activeEditor) {
+            return;
+        }
+        activeEditor.sqlText = sqlEditor.value || '';
+        activeEditor.selectedScript = scriptSelect ? (scriptSelect.value || '') : '';
+        activeEditor.queryLabel = queryLabelInput.value || '';
+        activeEditor.queryParams = queryParams.value || '';
+        activeEditor.saveName = saveNameInput.value || '';
+        activeEditor.selectedSchemaObjectName = selectedSchemaObjectNameInput ? selectedSchemaObjectNameInput.value || '' : '';
+        activeEditor.selectedSchemaObjectType = selectedSchemaObjectTypeInput ? selectedSchemaObjectTypeInput.value || '' : '';
+        activeEditor.cursorPosition = sqlEditor.selectionStart || 0;
+        activeEditor.updatedAt = Date.now();
+        updateEditorTitleFromDocument(activeEditor, state.editors.indexOf(activeEditor) + 1);
+        if (currentBadge) {
+            currentBadge.textContent = activeEditor.selectedScript || activeEditor.saveName || '(nuovo)';
+        }
+        if (btnUpdate) {
+            btnUpdate.disabled = !activeEditor.selectedScript;
+        }
+        const updateSelectedScript = document.getElementById('updateSelectedScript');
+        if (updateSelectedScript) {
+            updateSelectedScript.value = activeEditor.selectedScript || '';
+        }
+        renderEditorTabs(key);
+    }
+
+    function applyEditorDocument(connectionId, editorId) {
+        const state = getConnectionEditorState(connectionId, true);
+        if (!state) {
+            return;
+        }
+        const target = state.editors.find((doc) => doc.id === editorId) || state.editors[0];
+        if (!target) {
+            return;
+        }
+        state.activeEditorId = target.id;
+        sqlEditor.value = target.sqlText || '';
+        if (scriptSelect) {
+            scriptSelect.value = target.selectedScript || '';
+        }
+        queryLabelInput.value = target.queryLabel || '';
+        queryParams.value = target.queryParams || '';
+        saveNameInput.value = target.saveName || '';
+        setSelectedSchemaObject(target.selectedSchemaObjectName || '', target.selectedSchemaObjectType || '');
         updateLineNumbers();
-        const cursorPosition = Number.isInteger(draft.cursorPosition) ? draft.cursorPosition : 0;
+        const cursorPosition = Number.isInteger(target.cursorPosition) ? target.cursorPosition : 0;
         const safeCursor = Math.max(0, Math.min(cursorPosition, sqlEditor.value.length));
         sqlEditor.selectionStart = safeCursor;
         sqlEditor.selectionEnd = safeCursor;
+        if (currentBadge) {
+            currentBadge.textContent = target.selectedScript || target.saveName || '(nuovo)';
+        }
+        if (btnUpdate) {
+            btnUpdate.disabled = !target.selectedScript;
+        }
+        const updateSelectedScript = document.getElementById('updateSelectedScript');
+        if (updateSelectedScript) {
+            updateSelectedScript.value = target.selectedScript || '';
+        }
         syncBindParamsFromSql();
         hideSuggestions();
+        renderEditorTabs(connectionId);
+    }
+
+    function renderEditorTabs(connectionId) {
+        if (!editorTabs) {
+            return;
+        }
+        const key = getConnectionEditorKey(connectionId);
+        if (!key) {
+            editorTabs.innerHTML = '<span style="font-size:0.72rem;color:#64748b">Apri una connessione per usare gli editor</span>';
+            return;
+        }
+        const state = getConnectionEditorState(key, true);
+        const activeId = state.activeEditorId;
+        editorTabs.innerHTML = state.editors.map((doc) => {
+            const activeClass = doc.id === activeId ? ' active' : '';
+            return '<span class="editor-tab' + activeClass + '" data-editor-id="' + escapeHtml(doc.id) + '">' +
+                '<span class="tab-title" data-editor-id="' + escapeHtml(doc.id) + '">' + escapeHtml(doc.title || 'Editor') + '</span>' +
+                '<button class="close-btn" data-close-editor-id="' + escapeHtml(doc.id) + '" title="Chiudi editor">×</button>' +
+                '</span>';
+        }).join('');
+        wireEditorTabs();
+    }
+
+    function getCurrentEditorState() {
+        const connectionId = getActiveConnectionId();
+        if (!connectionId) {
+            return null;
+        }
+        return getConnectionEditorState(connectionId, true);
+    }
+
+    function createNewEditorForConnection(connectionId) {
+        const key = getConnectionEditorKey(connectionId);
+        if (!key) {
+            return null;
+        }
+        const state = getConnectionEditorState(key, true);
+        saveCurrentConnectionDraft(key);
+        const editor = createEditorDocument(state.editors.length + 1);
+        state.editors.push(editor);
+        state.activeEditorId = editor.id;
+        renderEditorTabs(key);
+        applyEditorDocument(key, editor.id);
+        sqlEditor.focus();
+        return editor;
+    }
+
+    function closeEditorForConnection(connectionId, editorId) {
+        const key = getConnectionEditorKey(connectionId);
+        if (!key) {
+            return;
+        }
+        const state = getConnectionEditorState(key, false);
+        if (!state) {
+            return;
+        }
+        saveCurrentConnectionDraft(key);
+        const idx = state.editors.findIndex((doc) => doc.id === editorId);
+        if (idx < 0) {
+            return;
+        }
+        state.editors.splice(idx, 1);
+        if (!state.editors.length) {
+            state.editors.push(createEditorDocument(1));
+        }
+        state.editors.forEach((doc, index) => updateEditorTitleFromDocument(doc, index + 1));
+        state.activeEditorId = state.editors[Math.max(0, idx - 1)] ? state.editors[Math.max(0, idx - 1)].id : state.editors[0].id;
+        renderEditorTabs(key);
+        applyEditorDocument(key, state.activeEditorId);
     }
 
     function bootstrapCurrentDraftIfMissing() {
-        const drafts = loadConnectionDraftsMap();
-        const key = getCurrentDraftKey();
-        if (drafts[key]) {
+        const connectionId = getActiveConnectionId();
+        if (!connectionId) {
             return;
         }
-        saveCurrentConnectionDraft();
+        if (!connectionEditorState[connectionId]) {
+            getConnectionEditorState(connectionId, true, true);
+        }
     }
 
     function loadConnectionProfiles() {
@@ -2307,6 +2656,7 @@
         connTarget.value = profile.connectionTarget || '';
         connUsername.value = profile.username || '';
         connSchema.value = profile.schema || '';
+        setConnectionPanelCollapsed(false);
         connPassword.focus();
     }
 
@@ -2345,9 +2695,16 @@
         updateHeaderRobotState(data.connections || [], data.activeConnectionId || '');
         setScriptLibraryScope(data.activeConnectionLabel || '');
         renderScriptSelectOptions(data.availableScripts || []);
-        applyConnectionDraft(getActiveConnectionId());
         renderConnectionTabs(data.connections || [], data.activeConnectionId || '');
         wireConnectionTabs();
+        const activeConnectionId = getActiveConnectionId();
+        if (activeConnectionId) {
+            const state = getConnectionEditorState(activeConnectionId, true);
+            renderEditorTabs(activeConnectionId);
+            applyEditorDocument(activeConnectionId, state.activeEditorId);
+        } else if (editorTabs) {
+            editorTabs.innerHTML = '<span style="font-size:0.72rem;color:#64748b">Nessuna connessione aperta</span>';
+        }
         await reloadSchemaGroups();
     }
 
@@ -2413,7 +2770,47 @@
         if (!data.ok) {
             throw new Error(data.message || 'Chiusura connessione fallita');
         }
+        delete connectionEditorState[getConnectionEditorKey(connectionId)];
         await refreshConnectionsAndSchema();
+    }
+
+    function wireEditorTabs() {
+        if (!editorTabs) {
+            return;
+        }
+        editorTabs.querySelectorAll('.editor-tab').forEach((tab) => {
+            if (tab.dataset.wired === 'true') {
+                return;
+            }
+            tab.dataset.wired = 'true';
+            tab.addEventListener('click', (e) => {
+                const editorId = e.currentTarget.getAttribute('data-editor-id');
+                const connectionId = getActiveConnectionId();
+                if (!editorId || !connectionId) {
+                    return;
+                }
+                saveCurrentConnectionDraft(connectionId);
+                applyEditorDocument(connectionId, editorId);
+                sqlEditor.focus();
+            });
+        });
+
+        editorTabs.querySelectorAll('.close-btn').forEach((btn) => {
+            if (btn.dataset.wired === 'true') {
+                return;
+            }
+            btn.dataset.wired = 'true';
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const editorId = e.currentTarget.getAttribute('data-close-editor-id');
+                const connectionId = getActiveConnectionId();
+                if (!editorId || !connectionId) {
+                    return;
+                }
+                closeEditorForConnection(connectionId, editorId);
+            });
+        });
     }
 
     function wireConnectionTabs() {
@@ -2455,6 +2852,11 @@
         const isCollapsed = connectionPanel.classList.contains('collapsed');
         setConnectionPanelCollapsed(!isCollapsed);
     });
+    if (btnCompileObject) {
+        btnCompileObject.addEventListener('click', async () => {
+            await compileCurrentEditorObject();
+        });
+    }
     if (schemaSidebar && btnToggleSchemaSidebar) {
         const schemaCollapsed = localStorage.getItem(SCHEMA_SIDEBAR_COLLAPSED_KEY) === 'true';
         setSchemaSidebarCollapsed(schemaCollapsed, false);
@@ -2499,8 +2901,9 @@
         const type = schemaItemClass(item.type);
         const icon = schemaItemIcon(item.type);
         const name = item.name || '';
+        const objectType = (item.type || '').toUpperCase();
         const columns = Array.isArray(item.columns) ? item.columns.length : 0;
-        return '<div class="schema-item ' + type + '" data-name="' + escapeHtml(name.toUpperCase()) + '" title="' + escapeHtml(name) + ' (' + columns + ' columns)">' +
+        return '<div class="schema-item ' + type + '" data-name="' + escapeHtml(name.toUpperCase()) + '" data-object-type="' + escapeHtml(objectType) + '" title="' + escapeHtml(name) + ' (' + columns + ' columns)">' +
             '<span class="schema-item-icon">' + icon + '</span>' +
             '<span class="schema-item-name">' + escapeHtml(name) + '</span>' +
             '</div>';
@@ -2624,6 +3027,7 @@
     function loadSchemaObjects() {
         bootstrapCurrentDraftIfMissing();
         renderConnectionProfilesSelect();
+        setSelectedSchemaObject('', '');
         refreshConnectionsAndSchema().catch((err) => {
             showMsg('Errore caricamento connessioni/schema: ' + err.message, false);
         });
@@ -2635,17 +3039,36 @@
                 return;
             }
             item.dataset.wired = 'true';
+            let clickTimer = null;
             item.addEventListener('click', function() {
+                if (clickTimer) {
+                    clearTimeout(clickTimer);
+                }
+                clickTimer = setTimeout(() => {
+                    const name = this.querySelector('.schema-item-name').textContent.trim();
+                    const objectType = this.getAttribute('data-object-type') || '';
+                    setSelectedSchemaObject(name, objectType);
+                    const cursorPos = sqlEditor.selectionStart;
+                    const before = sqlEditor.value.substring(0, cursorPos);
+                    const after = sqlEditor.value.substring(cursorPos);
+                    sqlEditor.value = before + name + after;
+                    sqlEditor.selectionStart = cursorPos + name.length;
+                    sqlEditor.selectionEnd = cursorPos + name.length;
+                    sqlEditor.focus();
+                    updateLineNumbers();
+                    saveCurrentConnectionDraft();
+                    clickTimer = null;
+                }, 220);
+            });
+            item.addEventListener('dblclick', async function() {
+                if (clickTimer) {
+                    clearTimeout(clickTimer);
+                    clickTimer = null;
+                }
                 const name = this.querySelector('.schema-item-name').textContent.trim();
-                const cursorPos = sqlEditor.selectionStart;
-                const before = sqlEditor.value.substring(0, cursorPos);
-                const after = sqlEditor.value.substring(cursorPos);
-                sqlEditor.value = before + name + after;
-                sqlEditor.selectionStart = cursorPos + name.length;
-                sqlEditor.selectionEnd = cursorPos + name.length;
-                sqlEditor.focus();
-                updateLineNumbers();
-                saveCurrentConnectionDraft();
+                const objectType = this.getAttribute('data-object-type') || '';
+                setSelectedSchemaObject(name, objectType);
+                await loadSelectedSchemaObjectSource();
             });
         });
     }

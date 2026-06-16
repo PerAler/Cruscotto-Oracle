@@ -49,7 +49,7 @@ public class DashboardController {
                                   String oracleCauseSection) {
     }
 
-    private static final String APP_VERSION = "1.2.0";
+    private static final String APP_VERSION = "1.4.0";
 
     private final SqlProcedureCatalogService catalogService;
     private final OracleProcedureExecutorService executorService;
@@ -735,6 +735,28 @@ public class DashboardController {
         return result;
     }
 
+    @GetMapping(value = "/api/schema/object-source", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public Map<String, Object> editorLoadSchemaObjectSource(
+            @RequestParam(value = "connectionId", required = false) String connectionId,
+            @RequestParam("objectType") String objectType,
+            @RequestParam("objectName") String objectName) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        oracleSchemaService.getSchemaObjectSource(connectionId, objectType, objectName).ifPresentOrElse(
+                sqlText -> {
+                    result.put("ok", true);
+                    result.put("objectType", objectType);
+                    result.put("objectName", objectName);
+                    result.put("sqlText", sqlText);
+                },
+                () -> {
+                    result.put("ok", false);
+                    result.put("message", "Sorgente non disponibile per " + objectType + " " + objectName);
+                }
+        );
+        return result;
+    }
+
     @PostMapping(value = "/editor/execute", produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
     public Map<String, Object> editorExecute(
@@ -752,6 +774,24 @@ public class DashboardController {
             if (!logs.isEmpty() && logs.get(0).outputHtmlFile() != null) {
                 result.put("outputUrl", "/output/" + queryOutputHtmlService.toHtmlFilename(logs.get(0).outputHtmlFile()));
             }
+        } catch (Exception ex) {
+            result.put("ok", false);
+            result.put("message", ex.getMessage());
+        }
+        return result;
+    }
+
+    @PostMapping(value = "/editor/compile", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public Map<String, Object> editorCompile(
+            @RequestParam("sqlText") String sqlText,
+            @RequestParam(value = "queryLabel", required = false) String queryLabel,
+            @RequestParam(value = "connectionId", required = false) String connectionId) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        try {
+            String message = executorService.runAdhocDdl(connectionId, queryLabel, sqlText);
+            result.put("ok", true);
+            result.put("message", message);
         } catch (Exception ex) {
             result.put("ok", false);
             result.put("message", ex.getMessage());

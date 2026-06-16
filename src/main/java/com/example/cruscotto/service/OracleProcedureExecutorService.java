@@ -66,6 +66,11 @@ public class OracleProcedureExecutorService {
         return runSql(connectionId, effectiveLabel, sqlText, inputParameters, true);
     }
 
+    public String runAdhocDdl(String connectionId, String queryLabel, String sqlText) {
+        String effectiveLabel = (queryLabel == null || queryLabel.isBlank()) ? "DDL Editor" : queryLabel.trim();
+        return runSql(connectionId, effectiveLabel, sqlText, Map.of(), false);
+    }
+
     private String runSql(String connectionId, String executionName, String sqlText, Map<String, Object> inputParameters, boolean selectOnly) {
         long start = System.currentTimeMillis();
         Map<String, Object> safeParameters = new LinkedHashMap<>(inputParameters == null ? Map.of() : inputParameters);

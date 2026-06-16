@@ -134,6 +134,46 @@ public class OracleSchemaService {
         }
     }
 
+    public Optional<String> getSchemaObjectSource(String connectionId, String objectType, String objectName) {
+        String normalizedObjectType = normalizeGroupObjectType(objectType);
+        String normalizedObjectName = objectName == null ? "" : objectName.trim();
+        if (normalizedObjectType.isBlank() || normalizedObjectName.isBlank()) {
+            return Optional.empty();
+        }
+
+        try {
+            OracleConnectionManager.ResolvedConnection resolved = connectionManager.resolveConnection(connectionId);
+            String owner = resolved.info().schema();
+            String metadataType = toMetadataObjectType(normalizedObjectType);
+            if (metadataType == null || metadataType.isBlank()) {
+                return Optional.empty();
+            }
+
+            String query = owner == null
+                    ? """
+                    SELECT DBMS_METADATA.GET_DDL(:objectType, :objectName) AS ddl
+                    FROM dual
+                    """
+                    : """
+                    SELECT DBMS_METADATA.GET_DDL(:objectType, :objectName, :owner) AS ddl
+                    FROM dual
+                    """
+                    ;
+            Map<String, Object> params = new LinkedHashMap<>();
+            params.put("objectType", metadataType);
+            params.put("objectName", normalizedObjectName);
+            if (owner != null && !owner.isBlank()) {
+                params.put("owner", owner.trim());
+            }
+
+            String ddl = resolved.template().queryForObject(query, params, String.class);
+            return Optional.ofNullable(ddl).map(String::trim).filter(sql -> !sql.isBlank());
+        } catch (Exception ex) {
+            log.error("Error fetching schema source for {} {}", normalizedObjectType, normalizedObjectName, ex);
+            return Optional.empty();
+        }
+    }
+
     private List<SchemaObject> loadObjectsByType(OracleConnectionManager.ResolvedConnection resolved, String objectType) {
         String owner = resolved.info().schema();
         String query = owner == null
@@ -283,6 +323,31 @@ public class OracleSchemaService {
         };
     }
 
+    private String toMetadataObjectType(String objectType) {
+        if (objectType == null || objectType.isBlank()) {
+            return null;
+        }
+
+        return switch (objectType.trim().toUpperCase(Locale.ROOT)) {
+            case "TABLE" -> "TABLE";
+            case "VIEW" -> "VIEW";
+            case "PROCEDURE" -> "PROCEDURE";
+            case "FUNCTION" -> "FUNCTION";
+            case "PACKAGE" -> "PACKAGE";
+            case "PACKAGE BODY" -> "PACKAGE_BODY";
+            case "TRIGGER" -> "TRIGGER";
+            case "SEQUENCE" -> "SEQUENCE";
+            case "SYNONYM" -> "SYNONYM";
+            case "TYPE" -> "TYPE";
+            case "TYPE BODY" -> "TYPE_BODY";
+            case "MATERIALIZED VIEW" -> "MATERIALIZED_VIEW";
+            case "MATERIALIZED VIEW LOG" -> "MATERIALIZED_VIEW_LOG";
+            case "JAVA SOURCE" -> "JAVA_SOURCE";
+            case "LIBRARY" -> "LIBRARY";
+            default -> objectType.trim().toUpperCase(Locale.ROOT).replace(' ', '_');
+        };
+    }
+
     private String toDomId(String groupKey) {
         return groupKey.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-").replaceAll("^-+|-+$", "");
     }
@@ -294,6 +359,31 @@ public class OracleSchemaService {
 
     private String normalizeGroupKey(String groupKey) {
         return groupKey == null ? "" : groupKey.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String normalizeGroupObjectType(String objectType) {
+        if (objectType == null) {
+            return "";
+        }
+        String normalized = objectType.trim().toUpperCase(Locale.ROOT);
+        return switch (normalized) {
+            case "TABLES" -> "TABLE";
+            case "VIEWS" -> "VIEW";
+            case "PROCEDURES" -> "PROCEDURE";
+            case "FUNCTIONS" -> "FUNCTION";
+            case "PACKAGES" -> "PACKAGE";
+            case "PACKAGE BODIES" -> "PACKAGE BODY";
+            case "TRIGGERS" -> "TRIGGER";
+            case "SEQUENCES" -> "SEQUENCE";
+            case "SYNONYMS" -> "SYNONYM";
+            case "TYPES" -> "TYPE";
+            case "TYPE BODIES" -> "TYPE BODY";
+            case "MATERIALIZED VIEWS" -> "MATERIALIZED VIEW";
+            case "MATERIALIZED VIEW LOGS" -> "MATERIALIZED VIEW LOG";
+            case "JAVA SOURCES" -> "JAVA SOURCE";
+            case "LIBRARIES" -> "LIBRARY";
+            default -> normalized;
+        };
     }
 
     private int countOtherObjects(Map<String, Integer> counts) {

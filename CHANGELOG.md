@@ -2,6 +2,12 @@
 
 Tutte le modifiche rilevanti a questo progetto sono documentate in questo file.
 
+## [1.4.0] - 2026-06-16
+### Changed
+- Editor SQL: multi-tab per connessione con stato solo temporaneo in RAM.
+- Editor SQL: doppio click sullo schema browser carica il sorgente nel tab attivo.
+- Editor SQL: rimosso il pulsante di lettura oggetto, ora superato dal doppio click.
+
 ## [1.2.0] - 2026-06-15
 ### Added
 - Persistenza profili connessione Oracle su file locale (`config/cruscotto-oracle-connections.json`) senza password.
@@ -19,6 +25,7 @@ Tutte le modifiche rilevanti a questo progetto sono documentate in questo file.
 - Editor SQL: esecuzione del blocco sotto il cursore invece del selettore query.
 - Terminatore query standardizzato su una riga contenente solo `/`.
 - Bozza editor allineata al cursore corrente.
+- Editor SQL: lettura sorgente e compilazione oggetti Oracle dal browser schema.
 
 ## [1.1.0] - 2026-06-15
 ### Added
