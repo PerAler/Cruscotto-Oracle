@@ -316,15 +316,23 @@ public class DashboardController {
     }
 
     @PostMapping("/catalog/reload")
-    public String reloadCatalog(@RequestParam(value = "selectedProcedure", required = false) String selectedProcedure) {
+    public String reloadCatalog(
+            @RequestParam(value = "selectedProcedure", required = false) String selectedProcedure,
+            @RequestParam(value = "connectionId", required = false) String connectionId) {
         String successMessage = null;
         String errorMessage = null;
+        String effectiveConnectionId = (connectionId == null || connectionId.isBlank())
+                ? connectionManager.getActiveConnectionId().orElse(null)
+                : connectionId.trim();
         try {
-            String activeConnectionLabel = resolveConnectionLabel(connectionManager.getActiveConnectionId().orElse(null));
+            String activeConnectionLabel = resolveConnectionLabel(effectiveConnectionId);
             catalogService.reloadProcedures(activeConnectionLabel);
             successMessage = "Catalogo SQL ricaricato";
         } catch (Exception ex) {
             errorMessage = "Errore durante la ricarica del catalogo SQL: " + ex.getMessage();
+        }
+        if (selectedProcedure == null || selectedProcedure.isBlank()) {
+            return redirectToEditor(null, successMessage, errorMessage, effectiveConnectionId);
         }
         return redirectToDashboard(selectedProcedure, successMessage, errorMessage);
     }

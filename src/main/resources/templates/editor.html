@@ -1460,23 +1460,71 @@
         return sql;
     }
 
+    function stripSqlLiteralsAndComments(sql) {
+        let result = '';
+        let i = 0;
+        const len = sql.length;
+        while (i < len) {
+            if (sql[i] === '-' && sql[i + 1] === '-') {
+                while (i < len && sql[i] !== '\n') i++;
+                continue;
+            }
+            if (sql[i] === '/' && sql[i + 1] === '*') {
+                i += 2;
+                while (i < len && !(sql[i] === '*' && sql[i + 1] === '/')) i++;
+                i += 2;
+                continue;
+            }
+            if ((sql[i] === 'q' || sql[i] === 'Q') && sql[i + 1] === '\'' && sql[i + 2]) {
+                const closer = matchingQQuoteDelimiter(sql[i + 2]);
+                i += 3;
+                while (i < len && !(sql[i] === closer && sql[i + 1] === '\'')) i++;
+                i += 2;
+                continue;
+            }
+            if (sql[i] === '\'') {
+                i++;
+                while (i < len) {
+                    if (sql[i] === '\'' && sql[i + 1] === '\'') { i += 2; }
+                    else if (sql[i] === '\'') { i++; break; }
+                    else { i++; }
+                }
+                continue;
+            }
+            result += sql[i];
+            i++;
+        }
+        return result;
+    }
+
     function syncBindParamsFromSql(sqlText) {
         const source = (typeof sqlText === 'string' ? sqlText : getEffectiveSqlText()) || '';
-        const matches = source.match(/:[a-zA-Z_]\w*/g);
+        const matches = stripSqlLiteralsAndComments(source).match(/:[a-zA-Z_]\w*/g);
         const params = [];
         const seen = new Set();
 
         if (matches) {
+            // Preserve existing param values already entered by the user
+            const existingValues = {};
+            (queryParams.value || '').split('\n').forEach(line => {
+                const eqIdx = line.indexOf('=');
+                if (eqIdx >= 0) {
+                    const name = line.substring(0, eqIdx).trim();
+                    if (name) existingValues[name] = line.substring(eqIdx + 1);
+                }
+            });
+
             matches.forEach((match) => {
                 const paramName = match.substring(1);
                 if (!seen.has(paramName)) {
                     seen.add(paramName);
-                    params.push(paramName + '=');
+                    params.push(paramName + '=' + (Object.prototype.hasOwnProperty.call(existingValues, paramName) ? existingValues[paramName] : ''));
                 }
             });
-        }
 
-        queryParams.value = params.join('\n');
+            queryParams.value = params.join('\n');
+        }
+        // No bind params in SQL → leave existing queryParams unchanged
     }
 
     function setSelectedSchemaObject(objectName, objectType) {
@@ -1751,9 +1799,14 @@
 
     // ── Ricarica catalogo ────────────────────────────────────────────────────
     btnReloadCatalog.addEventListener('click', () => {
+        const connId = getActiveConnectionId();
         const fd = new FormData();
+        fd.append('connectionId', connId);
         fetch('/catalog/reload', { method: 'POST', body: fd })
-            .then(() => location.reload())
+            .then(() => {
+                const url = '/editor' + (connId ? '?connectionId=' + encodeURIComponent(connId) : '');
+                location.assign(url);
+            })
             .catch(() => location.reload());
     });
 
@@ -1839,6 +1892,17 @@
             );
         });
 
+        // Add newline AFTER block-opening keywords so the first statement of
+        // the block starts on its own line and gets the correct indentation.
+        // These are the same keywords handled by INC_AFTER in the indentation
+        // pass; without the newline after them INC_AFTER never fires correctly.
+        ['BEGIN', 'DECLARE', 'THEN', 'LOOP', 'ELSE'].forEach(k => {
+            s = s.replace(
+                new RegExp('\\b(' + k + ')\\b(?= +\\S)', 'gi'),
+                '$1\n'
+            );
+        });
+
         // AND/OR on new indented lines
         s = s.replace(/ (AND|OR) /g, '\n    $1 ');
 
@@ -1864,7 +1928,20 @@
         s = result.join('\n');
 
         // Restore protected fragments
-        s = s.replace(/\x00(\d+)\x00/g, (_, i) => saved[parseInt(i, 10)]);
+        // Line comments (--) must always end with \n: if the formatter placed
+        // tokens after the placeholder on the same line, they would be silently
+        // commented out. We detect this by checking the character immediately
+        // after the placeholder in the pre-restore string.
+        s = s.replace(/\x00(\d+)\x00/g, (match, i, offset, str) => {
+            const fragment = saved[parseInt(i, 10)];
+            if (fragment.startsWith('--')) {
+                const charAfter = str[offset + match.length];
+                if (!fragment.endsWith('\n') && charAfter !== '\n') {
+                    return fragment + '\n';
+                }
+            }
+            return fragment;
+        });
 
         return s;
     }
