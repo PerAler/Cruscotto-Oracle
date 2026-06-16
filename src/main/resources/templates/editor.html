@@ -71,8 +71,8 @@
 
         #sqlEditor {
             flex: 1;
-            background: #1d1f21;
-            color: #c5c8c6;
+            background: transparent;
+            color: transparent;
             border: none;
             outline: none;
             padding: 0.75rem 0.75rem;
@@ -86,11 +86,51 @@
             overflow-y: auto;
             tab-size: 4;
             caret-color: #f0c040;
+            position: relative;
+            z-index: 1;
         }
 
         #sqlEditor::selection {
             background: #4a5568;
         }
+
+        /* ── Syntax-highlight overlay ─────────────────────────────────────── */
+        .sql-edit-area {
+            flex: 1;
+            position: relative;
+            display: flex;
+            min-width: 0;
+            overflow: hidden;
+            background: #1d1f21;
+        }
+
+        #sqlHighlight {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            padding: 0.75rem 0.75rem;
+            margin: 0;
+            border: none;
+            font-family: inherit;
+            font-size: inherit;
+            line-height: inherit;
+            tab-size: 4;
+            white-space: pre;
+            overflow-wrap: normal;
+            overflow: auto;
+            pointer-events: none;
+            background: transparent;
+            color: #c5c8c6;
+            z-index: 0;
+            scrollbar-width: none;
+        }
+        #sqlHighlight::-webkit-scrollbar { display: none; }
+
+        .hl-kw   { color: #81a2be; }
+        .hl-plkw { color: #b294bb; }
+        .hl-str  { color: #b5bd68; }
+        .hl-cmt  { color: #7c858a; font-style: italic; }
+        .hl-num  { color: #de935f; }
+        .hl-bind { color: #8abeb7; }
 
         .sql-suggest-box {
             position: absolute;
@@ -1114,13 +1154,16 @@
         <!-- ── Editor con numeri di riga ───────────────────────────────────── -->
         <div class="sql-editor-wrap" id="editorWrap">
             <div class="line-numbers" id="lineNumbers">1</div>
-            <textarea id="sqlEditor"
-                      spellcheck="false"
-                      autocorrect="off"
-                      autocapitalize="off"
-                      autocomplete="off"
-                      placeholder="-- Scrivi qui la tua query SELECT / WITH ..."
-                      th:text="${sqlContent}"></textarea>
+            <div class="sql-edit-area">
+                <pre id="sqlHighlight" aria-hidden="true"></pre>
+                <textarea id="sqlEditor"
+                          spellcheck="false"
+                          autocorrect="off"
+                          autocapitalize="off"
+                          autocomplete="off"
+                          placeholder="-- Scrivi qui la tua query SELECT / WITH ..."
+                          th:text="${sqlContent}"></textarea>
+            </div>
             <div class="sql-suggest-box" id="sqlSuggestBox" hidden>
                 <ul id="sqlSuggestList"></ul>
             </div>
@@ -1280,6 +1323,94 @@
         for (let i = 1; i <= lines; i++) nums += i + '\n';
         lineNumbers.textContent = nums;
         lineNumbers.scrollTop = sqlEditor.scrollTop;
+        scheduleHighlight();
+    }
+
+    // ── Syntax highlighting ──────────────────────────────────────────────────
+    const sqlHighlight = document.getElementById('sqlHighlight');
+
+    const HL_SQL_KW = /\b(SELECT|FROM|WHERE|HAVING|GROUP\s+BY|ORDER\s+BY|PARTITION\s+BY|CONNECT\s+BY|START\s+WITH|JOIN|LEFT|RIGHT|INNER|OUTER|FULL|CROSS|NATURAL|ON|AS|UNION|ALL|DISTINCT|INSERT|INTO|VALUES|UPDATE|SET|DELETE|MERGE|WITH|OVER|CREATE|ALTER|DROP|GRANT|REVOKE|COMMIT|ROLLBACK|SAVEPOINT|FETCH|ROWS|ONLY|FIRST|NEXT|EXISTS|IN|LIKE|BETWEEN|IS|NULL|AND|OR|NOT|CASE|WHEN|THEN|ELSE|END|ROWNUM|ROWID|LEVEL|PRIOR)\b/gi;
+    const HL_PLSQL_KW = /\b(BEGIN|DECLARE|EXCEPTION|RAISE|RAISE_APPLICATION_ERROR|RETURN|IF|ELSIF|LOOP|WHILE|FOR|EXIT|CURSOR|OPEN|CLOSE|PROCEDURE|FUNCTION|PACKAGE\s+BODY|PACKAGE|TRIGGER|EXECUTE|TRUE|FALSE|PRAGMA)\b/gi;
+
+    function hlEscape(s) {
+        return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function hlTokenize(text) {
+        const tokens = [];
+        let i = 0;
+        const len = text.length;
+        let plain = '';
+
+        function flush() { if (plain) { tokens.push({ t: 'code', v: plain }); plain = ''; } }
+
+        while (i < len) {
+            // Block comment
+            if (text[i] === '/' && text[i + 1] === '*') {
+                flush();
+                let j = i + 2;
+                while (j < len - 1 && !(text[j] === '*' && text[j + 1] === '/')) j++;
+                j = Math.min(j + 2, len);
+                tokens.push({ t: 'cmt', v: text.slice(i, j) });
+                i = j; continue;
+            }
+            // Line comment
+            if (text[i] === '-' && text[i + 1] === '-') {
+                flush();
+                let j = i + 2;
+                while (j < len && text[j] !== '\n') j++;
+                tokens.push({ t: 'cmt', v: text.slice(i, j) });
+                i = j; continue;
+            }
+            // String literal (with '' escape)
+            if (text[i] === "'") {
+                flush();
+                let j = i + 1;
+                while (j < len) {
+                    if (text[j] === "'" && text[j + 1] === "'") { j += 2; }
+                    else if (text[j] === "'") { j++; break; }
+                    else j++;
+                }
+                tokens.push({ t: 'str', v: text.slice(i, j) });
+                i = j; continue;
+            }
+            plain += text[i++];
+        }
+        flush();
+        return tokens;
+    }
+
+    function hlColorCode(raw) {
+        let s = hlEscape(raw);
+        s = s.replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="hl-num">$1</span>');
+        s = s.replace(/:[a-zA-Z_]\w*/g, '<span class="hl-bind">$&</span>');
+        // PL/SQL keywords before SQL to handle compound END IF / END LOOP etc.
+        s = s.replace(new RegExp(HL_PLSQL_KW.source, 'gi'), '<span class="hl-plkw">$&</span>');
+        s = s.replace(new RegExp(HL_SQL_KW.source, 'gi'), '<span class="hl-kw">$&</span>');
+        return s;
+    }
+
+    function hlBuild(text) {
+        if (!text) return '\n';
+        let html = '';
+        for (const tok of hlTokenize(text)) {
+            if (tok.t === 'cmt') html += `<span class="hl-cmt">${hlEscape(tok.v)}</span>`;
+            else if (tok.t === 'str') html += `<span class="hl-str">${hlEscape(tok.v)}</span>`;
+            else html += hlColorCode(tok.v);
+        }
+        return html + '\n'; // trailing \n avoids last-line height collapse
+    }
+
+    let hlRafId = null;
+    function scheduleHighlight() {
+        if (!sqlHighlight) return;
+        if (hlRafId) cancelAnimationFrame(hlRafId);
+        hlRafId = requestAnimationFrame(() => {
+            sqlHighlight.innerHTML = hlBuild(sqlEditor.value);
+            sqlHighlight.scrollTop  = sqlEditor.scrollTop;
+            sqlHighlight.scrollLeft = sqlEditor.scrollLeft;
+            hlRafId = null;
+        });
     }
 
     function matchingQQuoteDelimiter(openingDelimiter) {
@@ -1693,6 +1824,10 @@
     });
     sqlEditor.addEventListener('scroll', () => {
         lineNumbers.scrollTop = sqlEditor.scrollTop;
+        if (sqlHighlight) {
+            sqlHighlight.scrollTop  = sqlEditor.scrollTop;
+            sqlHighlight.scrollLeft = sqlEditor.scrollLeft;
+        }
     });
     sqlEditor.addEventListener('click', () => {
         refreshSuggestions();
