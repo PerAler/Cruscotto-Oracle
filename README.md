@@ -6,6 +6,18 @@ Applicazione web Spring Boot 3 per la gestione, esecuzione e monitoraggio di scr
 
 ## Changelog
 
+### v1.3.0 (2026-06-16)
+- **[CHANGED] UX pannello connessioni nello schema sidebar**
+  - Pannello connessioni collassato di default per liberare spazio al browser schema
+  - Combo profili connessione sempre visibile con pulsante Apri/Chiudi
+  - Auto-collasso del pannello dopo connessione Oracle riuscita
+- **[CHANGED] Tabs connessioni spostate nell'area editor**
+  - `connectionTabs` ora in `editor-main`, allineate ai comandi script
+- **[NEW] Multi-query selezionabile nell'editor**
+  - Supporto blocchi query con marker `-- @query: NomeBlocco`
+  - Selettore "Query nel file" per eseguire un blocco specifico alla volta
+  - Parametri bind e bozza editor allineati alla query attiva
+
 ### v1.2.0 (2026-06-15)
 - **[NEW] Profili connessione persistenti lato server**
   - La combo connessioni recupera i profili anche dopo riavvio applicazione

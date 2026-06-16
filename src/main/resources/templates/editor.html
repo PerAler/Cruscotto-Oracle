@@ -28,6 +28,32 @@
             max-width: 420px;
         }
 
+        .query-blocks-bar {
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+            flex-wrap: wrap;
+            margin-bottom: 0.7rem;
+        }
+
+        .query-blocks-bar label {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+        }
+
+        .query-blocks-bar select {
+            min-width: 260px;
+            max-width: 100%;
+        }
+
+        .query-blocks-hint {
+            font-size: 0.75rem;
+            color: #64748b;
+        }
+
         /* ── Editor SQL con numeri di riga ───────────────────────────────── */
         .sql-editor-wrap {
             display: flex;
@@ -322,6 +348,42 @@
             gap: 0.35rem;
         }
 
+        .connection-panel.collapsed {
+            padding: 0.4rem;
+            gap: 0;
+        }
+
+        .connection-panel-head {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .connection-panel-toggle {
+            border: 1px solid #bcd6e6;
+            border-radius: 4px;
+            background: #f0f7fb;
+            color: #0d4f67;
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 0.3rem 0.5rem;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .connection-panel.collapsed > :not(.connection-panel-head) {
+            display: none;
+        }
+
+        .connection-panel.collapsed .connection-panel-head {
+            margin-bottom: 0;
+        }
+
+        .connection-panel-head #connProfileSelect {
+            flex: 1;
+            min-width: 0;
+        }
+
         .connection-panel input {
             width: 100%;
             padding: 0.35rem 0.5rem;
@@ -334,6 +396,10 @@
             display: flex;
             flex-wrap: wrap;
             gap: 0.35rem;
+        }
+
+        .connection-tabs-main {
+            margin: 0.35rem 0 0.7rem;
         }
 
         .connection-tab {
@@ -880,11 +946,13 @@
             </div>
             <div class="schema-content">
                 <input type="hidden" id="activeConnectionId" th:value="${activeConnectionId}">
-                <div class="connection-panel">
-                    <div id="connectionTabs" class="connection-tabs"></div>
-                    <select id="connProfileSelect" title="Profili connessione salvati">
-                        <option value="">Profili connessione salvati</option>
-                    </select>
+                <div class="connection-panel collapsed" id="connectionPanel">
+                    <div class="connection-panel-head">
+                        <select id="connProfileSelect" title="Profili connessione salvati">
+                            <option value="">Profili connessione salvati</option>
+                        </select>
+                        <button class="connection-panel-toggle" id="btnToggleConnectionPanel" type="button" aria-expanded="false" title="Apri/chiudi campi connessione">Apri</button>
+                    </div>
                     <input type="text" id="connLabel" placeholder="Etichetta (es. PROD-ALER)">
                     <div style="font-size:0.7rem;color:#64748b">jdbc:oracle:thin:@</div>
                     <input type="text" id="connTarget" placeholder="dbserver:porta:sid (oppure URL JDBC completo)">
@@ -927,6 +995,7 @@
             </h2>
             <a href="/utility" class="nav-back" target="_blank" rel="noopener">↗ Apri Utility</a>
         </div>
+        <div id="connectionTabs" class="connection-tabs connection-tabs-main"></div>
 
         <!-- Barra selezione script -->
         <div class="editor-topbar" style="margin-bottom:0.8rem">
@@ -942,6 +1011,14 @@
             </select>
             <button class="btn btn-sec" id="btnLoad" type="button">Carica ▼</button>
             <button class="btn btn-sec" id="btnReloadCatalog" type="button" title="Ricarica catalogo SQL da disco">⟳ Catalogo</button>
+        </div>
+
+        <div class="query-blocks-bar">
+            <label for="queryBlockSelect">Query nel file</label>
+            <select id="queryBlockSelect" title="Seleziona la query da eseguire">
+                <option value="">Script completo</option>
+            </select>
+            <span class="query-blocks-hint" id="queryBlockHint">Usa `-- @query: nome` per definire blocchi eseguibili uno alla volta.</span>
         </div>
 
         <!-- Messaggio AJAX (visibile solo dopo esecuzione) -->
@@ -1051,6 +1128,8 @@
     const btnSave         = document.getElementById('btnSave');
     const btnUpdate       = document.getElementById('btnUpdate');
     const saveNameInput   = document.getElementById('saveNameInput');
+    const queryBlockSelect = document.getElementById('queryBlockSelect');
+    const queryBlockHint = document.getElementById('queryBlockHint');
     const queryLabelInput = document.getElementById('queryLabel');
     const queryParams     = document.getElementById('queryParams');
     const resultPanel     = document.getElementById('resultPanel');
@@ -1068,6 +1147,8 @@
     const headerSubtitle = document.querySelector('header.hero .hero-subtitle');
     const headerRuntime = document.querySelector('header.hero .hero-runtime');
     const connectionTabs = document.getElementById('connectionTabs');
+    const connectionPanel = document.getElementById('connectionPanel');
+    const btnToggleConnectionPanel = document.getElementById('btnToggleConnectionPanel');
     const btnOpenConnection = document.getElementById('btnOpenConnection');
     const connLabel = document.getElementById('connLabel');
     const connTarget = document.getElementById('connTarget');
@@ -1096,6 +1177,8 @@
     let suggestIndex = -1;
     let suggestContext = null;
     let savedConnectionProfiles = [];
+    let parsedQueryBlocks = [];
+    let activeQueryBlockIndex = -1;
 
     // ── Numeri di riga ───────────────────────────────────────────────────────
     function updateLineNumbers() {
@@ -1106,8 +1189,133 @@
         lineNumbers.scrollTop = sqlEditor.scrollTop;
     }
 
+    function parseQueryBlocks(sqlText) {
+        const source = sqlText || '';
+        const lines = source.split('\n');
+        const markerRegex = /^\s*--\s*@query\s*:\s*(.+?)\s*$/i;
+        const lineStarts = [];
+        let offset = 0;
+        lines.forEach((line) => {
+            lineStarts.push(offset);
+            offset += line.length + 1;
+        });
+
+        const markers = [];
+        lines.forEach((line, idx) => {
+            const match = line.match(markerRegex);
+            if (!match) {
+                return;
+            }
+            const rawName = (match[1] || '').trim();
+            const name = rawName || ('query_' + (markers.length + 1));
+            const markerStart = lineStarts[idx];
+            const sqlStart = Math.min(source.length, markerStart + line.length + 1);
+            markers.push({
+                name,
+                markerLine: idx + 1,
+                startOffset: sqlStart
+            });
+        });
+
+        if (!markers.length) {
+            return [];
+        }
+
+        return markers.map((marker, idx) => {
+            const next = markers[idx + 1];
+            const endOffset = next ? lineStarts[next.markerLine - 1] : source.length;
+            const rawSql = source.substring(marker.startOffset, Math.max(marker.startOffset, endOffset));
+            return {
+                name: marker.name,
+                markerLine: marker.markerLine,
+                startOffset: marker.startOffset,
+                endOffset: Math.max(marker.startOffset, endOffset),
+                sqlText: rawSql.trim()
+            };
+        });
+    }
+
+    function getCurrentSelectedQueryBlockName() {
+        if (activeQueryBlockIndex < 0 || activeQueryBlockIndex >= parsedQueryBlocks.length) {
+            return '';
+        }
+        return parsedQueryBlocks[activeQueryBlockIndex].name;
+    }
+
+    function setActiveQueryBlock(index, focusEditor) {
+        if (!parsedQueryBlocks.length) {
+            activeQueryBlockIndex = -1;
+            queryBlockSelect.value = '';
+            return;
+        }
+        const safeIndex = Number.isInteger(index) && index >= 0 && index < parsedQueryBlocks.length ? index : 0;
+        activeQueryBlockIndex = safeIndex;
+        queryBlockSelect.value = String(safeIndex);
+        if (focusEditor) {
+            const block = parsedQueryBlocks[safeIndex];
+            if (block) {
+                sqlEditor.focus();
+                sqlEditor.setSelectionRange(block.startOffset, block.endOffset);
+            }
+        }
+    }
+
+    function refreshQueryBlockSelector(preferredBlockName) {
+        parsedQueryBlocks = parseQueryBlocks(sqlEditor.value || '');
+        if (!parsedQueryBlocks.length) {
+            activeQueryBlockIndex = -1;
+            queryBlockSelect.innerHTML = '<option value="">Script completo</option>';
+            queryBlockSelect.value = '';
+            queryBlockSelect.disabled = true;
+            queryBlockHint.textContent = 'Usa `-- @query: nome` per definire blocchi eseguibili uno alla volta.';
+            return;
+        }
+
+        const options = parsedQueryBlocks.map((block, idx) => (
+            '<option value="' + idx + '">' + escapeHtml(block.name) + '</option>'
+        ));
+        queryBlockSelect.innerHTML = options.join('');
+        queryBlockSelect.disabled = false;
+        queryBlockHint.textContent = 'Esecuzione limitata al blocco selezionato.';
+
+        const targetName = (preferredBlockName || '').trim();
+        const targetIndex = targetName
+            ? parsedQueryBlocks.findIndex((block) => block.name === targetName)
+            : -1;
+        setActiveQueryBlock(targetIndex >= 0 ? targetIndex : 0, false);
+    }
+
+    function getEffectiveSqlText() {
+        if (activeQueryBlockIndex < 0 || activeQueryBlockIndex >= parsedQueryBlocks.length) {
+            return (sqlEditor.value || '').trim();
+        }
+        return (parsedQueryBlocks[activeQueryBlockIndex].sqlText || '').trim();
+    }
+
+    function stripLeadingCommentsAndSeparators(sqlText) {
+        let sql = (sqlText || '').trimStart();
+        while (sql.length) {
+            if (sql.startsWith('--')) {
+                const newline = sql.indexOf('\n');
+                sql = newline >= 0 ? sql.substring(newline + 1).trimStart() : '';
+                continue;
+            }
+            if (sql.startsWith('/*')) {
+                const endComment = sql.indexOf('*/');
+                sql = endComment >= 0 ? sql.substring(endComment + 2).trimStart() : '';
+                continue;
+            }
+            if (sql.startsWith(';')) {
+                sql = sql.substring(1).trimStart();
+                continue;
+            }
+            break;
+        }
+        return sql;
+    }
+
     function syncBindParamsFromSql() {
-        const matches = sqlEditor.value.match(/:[a-zA-Z_]\w*/g);
+        const matches = getEffectiveSqlText().match(/:[a-zA-Z_]\w*/g);
         const params = [];
         const seen = new Set();
 
@@ -1242,6 +1450,7 @@
         sqlEditor.selectionStart = newCaret;
         sqlEditor.selectionEnd = newCaret;
         updateLineNumbers();
+        refreshQueryBlockSelector(getCurrentSelectedQueryBlockName());
         syncBindParamsFromSql();
         hideSuggestions();
         saveCurrentConnectionDraft();
@@ -1260,7 +1469,9 @@
     });
 
     sqlEditor.addEventListener('input', () => {
+        const selectedBlockName = getCurrentSelectedQueryBlockName();
         updateLineNumbers();
+        refreshQueryBlockSelector(selectedBlockName);
         syncBindParamsFromSql();
         refreshSuggestions();
         saveCurrentConnectionDraft();
@@ -1313,6 +1524,7 @@
             sqlEditor.value = sqlEditor.value.substring(0, start) + '    ' + sqlEditor.value.substring(end);
             sqlEditor.selectionStart = sqlEditor.selectionEnd = start + 4;
             updateLineNumbers();
+            refreshQueryBlockSelector('');
             syncBindParamsFromSql();
             refreshSuggestions();
             saveCurrentConnectionDraft();
@@ -1337,6 +1549,7 @@
             btnUpdate.disabled = true;
             document.getElementById('updateSelectedScript').value = '';
             updateLineNumbers();
+            refreshQueryBlockSelector('');
             syncBindParamsFromSql();
             hideMsg();
             saveCurrentConnectionDraft();
@@ -1349,6 +1562,7 @@
                 currentBadge.textContent = name;
                 saveNameInput.value = name;
                 updateLineNumbers();
+                refreshQueryBlockSelector('');
                 syncBindParamsFromSql();
                 hideMsg();
                 // Aggiorna pulsante Update
@@ -1494,12 +1708,16 @@
 
     // ── Esegui query (AJAX) ──────────────────────────────────────────────────
     btnRun.addEventListener('click', async () => {
-        const sql = sqlEditor.value.trim();
-        if (!sql) { showMsg('Inserisci una query SQL.', false); return; }
+        const sql = getEffectiveSqlText();
+        if (!sql) {
+            showMsg(activeQueryBlockIndex >= 0 ? 'La query selezionata è vuota.' : 'Inserisci una query SQL.', false);
+            return;
+        }
 
         // Verifica che la query sia eseguibile
         const allowedKeywords = ['SELECT', 'WITH', 'INSERT', 'UPDATE'];
-        const isExecutable = allowedKeywords.some(keyword => sql.toUpperCase().startsWith(keyword));
+        const normalizedSql = stripLeadingCommentsAndSeparators(sql);
+        const isExecutable = allowedKeywords.some(keyword => normalizedSql.toUpperCase().startsWith(keyword));
         if (!isExecutable) {
             showMsg('Solo query SELECT, WITH, INSERT e UPDATE possono essere eseguite.', false);
             return;
@@ -1604,6 +1822,13 @@
 
     queryParams.addEventListener('input', () => {
         saveCurrentConnectionDraft();
+    });
+
+    queryBlockSelect.addEventListener('change', () => {
+    const idx = Number(queryBlockSelect.value);
+    setActiveQueryBlock(Number.isFinite(idx) ? idx : 0, true);
+    syncBindParamsFromSql();
+    saveCurrentConnectionDraft();
     });
 
     saveNameInput.addEventListener('input', () => {
@@ -1899,6 +2124,7 @@
             queryLabel: queryLabelInput.value || '',
             queryParams: queryParams.value || '',
             saveName: saveNameInput.value || '',
+            queryBlockName: getCurrentSelectedQueryBlockName(),
             updatedAt: Date.now()
         };
         saveConnectionDraftsMap(drafts);
@@ -1916,6 +2142,7 @@
         queryParams.value = draft.queryParams || '';
         saveNameInput.value = draft.saveName || '';
         updateLineNumbers();
+        refreshQueryBlockSelector(draft.queryBlockName || '');
         hideSuggestions();
     }
 
@@ -1938,6 +2165,15 @@
             return;
         }
         savedConnectionProfiles = profiles.filter((p) => p && p.label && p.connectionTarget && p.username);
+    }
+
+    function setConnectionPanelCollapsed(collapsed) {
+        if (!connectionPanel || !btnToggleConnectionPanel) {
+            return;
+        }
+        connectionPanel.classList.toggle('collapsed', collapsed);
+        btnToggleConnectionPanel.textContent = collapsed ? 'Apri' : 'Chiudi';
+        btnToggleConnectionPanel.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
     }
 
     function renderConnectionProfilesSelect() {
@@ -2053,6 +2289,7 @@
         connPassword.value = '';
         showMsg(data.message || 'Connessione aperta', true);
         await refreshConnectionsAndSchema();
+        setConnectionPanelCollapsed(true);
     }
 
     async function activateConnection(connectionId) {
@@ -2119,6 +2356,10 @@
         } catch (err) {
             showMsg('Errore apertura connessione: ' + err.message, false);
         }
+    });
+    btnToggleConnectionPanel.addEventListener('click', () => {
+        const isCollapsed = connectionPanel.classList.contains('collapsed');
+        setConnectionPanelCollapsed(!isCollapsed);
     });
     connProfileSelect.addEventListener('change', applySavedProfile);
 
