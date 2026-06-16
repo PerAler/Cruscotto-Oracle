@@ -2,6 +2,16 @@
 
 Tutte le modifiche rilevanti a questo progetto sono documentate in questo file.
 
+## [1.4.1] - 2026-06-16
+### Fixed
+- Editor SQL: parametri bind preservati al cambio SQL/tab; esclusi token `:x` dentro stringhe e commenti.
+- Editor SQL: ricarica catalogo ora opera sulla connessione attiva nel browser (non sullo stato server).
+- Editor SQL: formattatore PL/SQL — commenti `--` non ingeriscono più il codice sulla stessa riga.
+- Editor SQL: formattatore PL/SQL — `BEGIN`, `THEN`, `LOOP`, `ELSE` aprono il blocco sulla riga successiva.
+
+### Added
+- Editor SQL: syntax highlighting dinamico durante la digitazione (keyword SQL/PL-SQL, stringhe, commenti, numeri, bind params).
+
 ## [1.4.0] - 2026-06-16
 ### Changed
 - Editor SQL: multi-tab per connessione con stato solo temporaneo in RAM.
