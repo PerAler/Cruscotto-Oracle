@@ -2,6 +2,15 @@
 
 Tutte le modifiche rilevanti a questo progetto sono documentate in questo file.
 
+## [1.4.3] - 2026-06-17
+### Fixed
+- Editor SQL: pulsanti **Salva nuovo** e **Aggiorna script** convertiti da `form.submit()` a chiamate AJAX — al salvataggio non viene più azzerato lo stato di tutti gli editor aperti sulle altre connessioni.
+- Editor SQL: aggiunto `th:inline="none"` al tag `<script>` principale per evitare che Thymeleaf/AttoParser interpretasse i template literal JavaScript (`${...}`) come espressioni SpEL, causando `ParseException` e pagina non renderizzata.
+- Editor SQL: ripristinata funzione JS `setActiveConnectionId` rimossa accidentalmente.
+- Editor SQL: profili connessione salvati (`cruscotto-oracle-connections.json`) ora pre-iniettati direttamente nell'HTML via `<input hidden>` + `ObjectMapper.writeValueAsString`, disponibili nella combo al caricamento della pagina senza attendere la chiamata AJAX a `/api/connections`.
+- API `/api/connections`: wrappata in try-catch; `savedProfiles` serializzati esplicitamente come `List<Map>` per evitare problemi Jackson con record Java contenenti `Instant`.
+- `OracleConnectionManager`: logging esplicito su `loadSavedProfilesFromDisk` (INFO su percorso e numero profili, ERROR in caso di eccezione).
+
 ## [1.4.2] - 2026-06-17
 ### Added
 - Editor SQL (pagina editor): pulsante `Stop` per interrompere l'elaborazione in corso sulla connessione attiva.

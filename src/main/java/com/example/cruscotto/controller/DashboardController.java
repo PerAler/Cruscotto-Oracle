@@ -50,7 +50,7 @@ public class DashboardController {
                                   String oracleCauseSection) {
     }
 
-    private static final String APP_VERSION = "1.4.2";
+    private static final String APP_VERSION = "1.4.3";
 
     private final SqlProcedureCatalogService catalogService;
     private final OracleProcedureExecutorService executorService;
