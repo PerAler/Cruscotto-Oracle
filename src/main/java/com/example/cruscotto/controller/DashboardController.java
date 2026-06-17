@@ -731,6 +731,16 @@ public class DashboardController {
         model.addAttribute("runtimePid", runtimePid);
         model.addAttribute("runtimeStartedAt", runtimeStartedAt);
         model.addAttribute("appVersion", APP_VERSION);
+        List<Map<String, Object>> savedProfileMaps = connectionManager.listSavedProfiles().stream()
+                .map(p -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("label", p.label());
+                    m.put("connectionTarget", p.connectionTarget());
+                    m.put("username", p.username());
+                    m.put("schema", p.schema());
+                    return m;
+                }).toList();
+        model.addAttribute("savedProfilesJson", savedProfileMaps);
         return "editor";
     }
 
@@ -933,26 +943,41 @@ public class DashboardController {
     @ResponseBody
     public Map<String, Object> listConnections() {
         Map<String, Object> result = new LinkedHashMap<>();
-        String activeConnectionId = connectionManager.getActiveConnectionId().orElse("");
-        String activeConnectionLabel = resolveConnectionLabel(activeConnectionId);
-        result.put("ok", true);
-        result.put("activeConnectionId", activeConnectionId);
-        result.put("activeConnectionLabel", activeConnectionLabel);
-        result.put("availableScripts", catalogService.findAll(activeConnectionLabel).stream()
-                .map(com.example.cruscotto.model.ProcedureDefinition::name)
-                .toList());
-        result.put("connections", connectionManager.listConnections().stream().map(view -> {
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("id", view.info().id());
-            row.put("label", view.info().label());
-            row.put("connectionTarget", view.info().connectionTarget());
-            row.put("jdbcUrl", view.info().jdbcUrl());
-            row.put("username", view.info().username());
-            row.put("schema", view.info().schema());
-            row.put("reachable", view.reachable());
-            return row;
-        }).toList());
-        result.put("savedProfiles", connectionManager.listSavedProfiles());
+        try {
+            String activeConnectionId = connectionManager.getActiveConnectionId().orElse("");
+            String activeConnectionLabel = resolveConnectionLabel(activeConnectionId);
+            result.put("ok", true);
+            result.put("activeConnectionId", activeConnectionId);
+            result.put("activeConnectionLabel", activeConnectionLabel);
+            result.put("availableScripts", catalogService.findAll(activeConnectionLabel).stream()
+                    .map(com.example.cruscotto.model.ProcedureDefinition::name)
+                    .toList());
+            result.put("connections", connectionManager.listConnections().stream().map(view -> {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("id", view.info().id());
+                row.put("label", view.info().label());
+                row.put("connectionTarget", view.info().connectionTarget());
+                row.put("jdbcUrl", view.info().jdbcUrl());
+                row.put("username", view.info().username());
+                row.put("schema", view.info().schema());
+                row.put("reachable", view.reachable());
+                return row;
+            }).toList());
+            List<Map<String, Object>> profileMaps = connectionManager.listSavedProfiles().stream()
+                    .map(p -> {
+                        Map<String, Object> m = new LinkedHashMap<>();
+                        m.put("label", p.label());
+                        m.put("connectionTarget", p.connectionTarget());
+                        m.put("username", p.username());
+                        m.put("schema", p.schema());
+                        m.put("lastSuccessfulAt", p.lastSuccessfulAt() != null ? p.lastSuccessfulAt().toString() : null);
+                        return m;
+                    }).toList();
+            result.put("savedProfiles", profileMaps);
+        } catch (Exception ex) {
+            result.put("ok", false);
+            result.put("message", "Errore caricamento connessioni: " + ex.getMessage());
+        }
         return result;
     }
 

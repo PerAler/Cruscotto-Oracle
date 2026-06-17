@@ -6,6 +6,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -31,6 +33,8 @@ import java.util.function.Function;
 
 @Service
 public class OracleConnectionManager {
+
+    private static final Logger log = LoggerFactory.getLogger(OracleConnectionManager.class);
 
     private static final Pattern ORACLE_IDENTIFIER = Pattern.compile("[A-Z][A-Z0-9_$#]{0,127}");
     private static final Pattern CONNECTION_TARGET_SID = Pattern.compile("[A-Za-z0-9._-]+:\\d{1,5}:[A-Za-z0-9._$#-]+");
@@ -313,9 +317,12 @@ public class OracleConnectionManager {
     }
 
     private synchronized void loadSavedProfilesFromDisk() {
+        Path absPath = CONNECTION_PROFILES_FILE.toAbsolutePath();
         if (!Files.exists(CONNECTION_PROFILES_FILE)) {
+            log.warn("File profili connessioni non trovato: {}", absPath);
             return;
         }
+        log.info("Caricamento profili connessioni da: {}", absPath);
         try {
             List<OracleConnectionProfile> loaded = objectMapper.readValue(
                     CONNECTION_PROFILES_FILE.toFile(),
@@ -340,7 +347,9 @@ public class OracleConnectionManager {
                     savedProfiles.add(profile);
                 }
             }
-        } catch (Exception ignored) {
+            log.info("Caricati {} profili connessioni", savedProfiles.size());
+        } catch (Exception e) {
+            log.error("Errore caricamento profili connessioni da {}: {}", absPath, e.getMessage(), e);
             savedProfiles.clear();
         }
     }

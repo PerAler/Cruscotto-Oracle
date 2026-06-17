@@ -9,6 +9,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 import java.awt.Desktop;
 import java.net.URI;
+import java.nio.file.Path;
 
 @SpringBootApplication
 @EnableScheduling
@@ -20,6 +21,8 @@ public class CruscottoOracleApplication extends SpringBootServletInitializer {
     }
 
     public static void main(String[] args) {
+        System.out.println("[STARTUP] Working directory (user.dir): " + System.getProperty("user.dir"));
+        System.out.println("[STARTUP] Config file atteso: " + Path.of("config", "cruscotto-oracle-connections.json").toAbsolutePath());
         ConfigurableApplicationContext context = SpringApplication.run(CruscottoOracleApplication.class, args);
         openBrowser(context);
     }

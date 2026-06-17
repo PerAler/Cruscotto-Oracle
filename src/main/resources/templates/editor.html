@@ -1235,6 +1235,10 @@
 
 </main>
 
+<!-- Profili connessione pre-caricati da server (disponibili prima del AJAX) -->
+<script th:inline="javascript">
+    window._initialSavedProfiles = /*[[${savedProfilesJson}]]*/ [];
+</script>
 <script th:inline="none">
 (function () {
     'use strict';
@@ -1310,7 +1314,7 @@
     let suggestItems = [];
     let suggestIndex = -1;
     let suggestContext = null;
-    let savedConnectionProfiles = [];
+    let savedConnectionProfiles = (Array.isArray(window._initialSavedProfiles) ? window._initialSavedProfiles : []);
     let connectionEditorState = {};
     let currentRunAbortController = null;
     let currentRunConnectionId = null;
