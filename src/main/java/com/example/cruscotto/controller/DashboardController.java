@@ -543,6 +543,17 @@ public class DashboardController {
                 .orElse(null);
     }
 
+    private String resolveRequiredConnectionLabel(String connectionId) {
+        if (connectionId == null || connectionId.isBlank()) {
+            throw new IllegalArgumentException("Connessione attiva non specificata: seleziona una connessione aperta.");
+        }
+        Optional<OracleConnectionInfo> info = connectionManager.findConnectionInfo(connectionId.trim());
+        if (info.isEmpty()) {
+            throw new IllegalArgumentException("Connessione non valida o non più attiva.");
+        }
+        return info.get().label();
+    }
+
     private Map<String, Object> extractProcedureParams(Map<String, String> requestParams) {
         Map<String, Object> params = new LinkedHashMap<>();
 
@@ -825,37 +836,49 @@ public class DashboardController {
         return result;
     }
 
-    @PostMapping("/editor/save")
-    public String editorSave(
+    @PostMapping(value = "/editor/save", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public Map<String, Object> editorSave(
             @RequestParam("sqlText") String sqlText,
             @RequestParam(value = "queryFileName", required = false) String queryFileName,
             @RequestParam(value = "queryLabel", required = false) String queryLabel,
             @RequestParam(value = "connectionId", required = false) String connectionId) {
+        Map<String, Object> result = new LinkedHashMap<>();
         try {
-            String activeConnectionLabel = resolveConnectionLabel(connectionId);
+            String activeConnectionLabel = resolveRequiredConnectionLabel(connectionId);
             String requestedName = resolveQuerySaveName(queryFileName, queryLabel);
             String savedName = catalogService.saveSqlFile(activeConnectionLabel, requestedName, sqlText, false);
-            return redirectToEditor(savedName, "Script salvato: '" + savedName + ".sql'", null, connectionId);
+            result.put("ok", true);
+            result.put("savedName", savedName);
+            result.put("message", "Script salvato: '" + savedName + ".sql'");
         } catch (Exception ex) {
-            return redirectToEditor(null, null, "Salvataggio: " + ex.getMessage(), connectionId);
+            result.put("ok", false);
+            result.put("message", "Salvataggio: " + ex.getMessage());
         }
+        return result;
     }
 
-    @PostMapping("/editor/update")
-    public String editorUpdate(
+    @PostMapping(value = "/editor/update", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public Map<String, Object> editorUpdate(
             @RequestParam("sqlText") String sqlText,
             @RequestParam(value = "selectedScript", required = false) String selectedScript,
             @RequestParam(value = "connectionId", required = false) String connectionId) {
+        Map<String, Object> result = new LinkedHashMap<>();
         try {
-            String activeConnectionLabel = resolveConnectionLabel(connectionId);
+            String activeConnectionLabel = resolveRequiredConnectionLabel(connectionId);
             if (selectedScript == null || selectedScript.isBlank()) {
                 throw new IllegalArgumentException("Seleziona uno script da aggiornare");
             }
             String updatedName = catalogService.updateSqlFile(activeConnectionLabel, selectedScript, sqlText);
-            return redirectToEditor(updatedName, "Script aggiornato: '" + updatedName + ".sql'", null, connectionId);
+            result.put("ok", true);
+            result.put("updatedName", updatedName);
+            result.put("message", "Script aggiornato: '" + updatedName + ".sql'");
         } catch (Exception ex) {
-            return redirectToEditor(selectedScript, null, "Aggiornamento: " + ex.getMessage(), connectionId);
+            result.put("ok", false);
+            result.put("message", "Aggiornamento: " + ex.getMessage());
         }
+        return result;
     }
 
     private String redirectToEditor(String script, String msg, String error, String connectionId) {

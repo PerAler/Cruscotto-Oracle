@@ -1204,22 +1204,11 @@
             <div class="spacer"></div>
 
             <!-- Salva come nuovo script -->
-            <form id="formSave" method="post" action="/editor/save" style="display:inline;margin:0">
-                <input type="hidden" id="saveSqlText" name="sqlText">
-                <input type="hidden" id="saveQueryFileName" name="queryFileName">
-                <input type="hidden" id="saveQueryLabel" name="queryLabel">
-                <input type="hidden" id="saveConnectionId" name="connectionId">
-                <button class="btn btn-save" id="btnSave" type="button">💾 Salva nuovo</button>
-            </form>
+            <button class="btn btn-save" id="btnSave" type="button">💾 Salva nuovo</button>
 
             <!-- Aggiorna script selezionato -->
-            <form id="formUpdate" method="post" action="/editor/update" style="display:inline;margin:0">
-                <input type="hidden" id="updateSqlText" name="sqlText">
-                <input type="hidden" id="updateSelectedScript" name="selectedScript">
-                <input type="hidden" id="updateConnectionId" name="connectionId">
-                <button class="btn btn-upd" id="btnUpdate" type="button"
-                        th:disabled="${selectedScript == null}">✏ Aggiorna script</button>
-            </form>
+            <button class="btn btn-upd" id="btnUpdate" type="button"
+                    th:disabled="${selectedScript == null}">✏ Aggiorna script</button>
     </div>
 
     </section>
@@ -1917,7 +1906,6 @@
             currentBadge.textContent = '(nuovo)';
             saveNameInput.value = '';
             btnUpdate.disabled = true;
-            document.getElementById('updateSelectedScript').value = '';
             setSelectedSchemaObject('', '');
             updateLineNumbers();
             sqlEditor.selectionStart = 0;
@@ -1942,7 +1930,6 @@
                 hideMsg();
                 // Aggiorna pulsante Update
                 btnUpdate.disabled = false;
-                document.getElementById('updateSelectedScript').value = name;
                 saveCurrentConnectionDraft();
             })
             .catch(err => showMsg('Errore caricamento script: ' + err, false));
@@ -2204,31 +2191,84 @@
     }
 
     // ── Salva nuovo script ───────────────────────────────────────────────────
-    btnSave.addEventListener('click', () => {
+    btnSave.addEventListener('click', async () => {
         const sql = sqlEditor.value.trim();
         if (!sql) { showMsg('Inserisci una query SQL da salvare.', false); return; }
         const fileName = saveNameInput.value.trim();
         if (!fileName) { showMsg('Specifica un nome file prima di salvare.', false); saveNameInput.focus(); return; }
+        const connectionId = getActiveConnectionId();
+        if (!connectionId) { showMsg('Apri una connessione Oracle prima di salvare.', false); return; }
 
-        document.getElementById('saveSqlText').value = sql;
-        document.getElementById('saveQueryFileName').value = fileName;
-        document.getElementById('saveQueryLabel').value = queryLabelInput.value;
-        document.getElementById('saveConnectionId').value = getActiveConnectionId();
-        document.getElementById('formSave').submit();
+        btnSave.disabled = true;
+        try {
+            const fd = new FormData();
+            fd.append('sqlText', sql);
+            fd.append('queryFileName', fileName);
+            fd.append('queryLabel', queryLabelInput.value);
+            fd.append('connectionId', connectionId);
+            const resp = await fetch('/editor/save', { method: 'POST', body: fd });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const data = await resp.json();
+            if (data.ok) {
+                showMsg(data.message, true);
+                const savedName = data.savedName || fileName;
+                // Aggiorna la select senza reload: aggiunge l'opzione se non esiste
+                if (scriptSelect && !Array.from(scriptSelect.options).some(o => o.value === savedName)) {
+                    const opt = document.createElement('option');
+                    opt.value = savedName;
+                    opt.textContent = savedName;
+                    scriptSelect.appendChild(opt);
+                }
+                if (scriptSelect) scriptSelect.value = savedName;
+                if (currentBadge) currentBadge.textContent = savedName;
+                saveNameInput.value = savedName;
+                btnUpdate.disabled = false;
+                // Aggiorna il documento attivo con il nome salvato
+                saveCurrentConnectionDraft();
+                const doc = getActiveEditorDocument(connectionId);
+                if (doc) {
+                    doc.selectedScript = savedName;
+                    doc.saveName = savedName;
+                    saveCurrentConnectionDraft();
+                }
+            } else {
+                showMsg(data.message, false);
+            }
+        } catch (err) {
+            showMsg('Errore salvataggio: ' + err.message, false);
+        } finally {
+            btnSave.disabled = false;
+        }
     });
 
     // ── Aggiorna script esistente ────────────────────────────────────────────
-    btnUpdate.addEventListener('click', () => {
+    btnUpdate.addEventListener('click', async () => {
         const sql = sqlEditor.value.trim();
         if (!sql) { showMsg('Il testo SQL è vuoto.', false); return; }
-        const name = scriptSelect.value;
+        const connectionId = getActiveConnectionId();
+        if (!connectionId) { showMsg('Apri una connessione Oracle prima di aggiornare lo script.', false); return; }
+        const activeDoc = getActiveEditorDocument(connectionId);
+        const name = (activeDoc && activeDoc.selectedScript ? activeDoc.selectedScript : (scriptSelect ? scriptSelect.value : '')).trim();
         if (!name) { showMsg("Seleziona prima uno script dall'elenco.", false); return; }
         if (!confirm('Sovrascrivere lo script "' + name + '" con il contenuto corrente?')) return;
 
-        document.getElementById('updateSqlText').value = sql;
-        document.getElementById('updateSelectedScript').value = name;
-        document.getElementById('updateConnectionId').value = getActiveConnectionId();
-        document.getElementById('formUpdate').submit();
+        btnUpdate.disabled = true;
+        try {
+            const fd = new FormData();
+            fd.append('sqlText', sql);
+            fd.append('selectedScript', name);
+            fd.append('connectionId', connectionId);
+            const resp = await fetch('/editor/update', { method: 'POST', body: fd });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const data = await resp.json();
+            showMsg(data.message, Boolean(data.ok));
+        } catch (err) {
+            showMsg('Errore aggiornamento: ' + err.message, false);
+        } finally {
+            // re-abilita solo se c'è ancora uno script selezionato
+            const doc = getActiveEditorDocument(connectionId);
+            btnUpdate.disabled = !(doc && doc.selectedScript);
+        }
     });
 
     if (btnNewEditor) {
@@ -2488,10 +2528,6 @@
             saveNameInput.value = selected.objectName;
             currentBadge.textContent = selected.objectType + ' ' + selected.objectName;
             btnUpdate.disabled = true;
-            const updateSelectedScript = document.getElementById('updateSelectedScript');
-            if (updateSelectedScript) {
-                updateSelectedScript.value = '';
-            }
             updateLineNumbers();
             sqlEditor.selectionStart = 0;
             sqlEditor.selectionEnd = 0;
@@ -2602,7 +2638,6 @@
             scriptSelect.value = previousSelection;
             currentBadge.textContent = previousSelection;
             btnUpdate.disabled = false;
-            document.getElementById('updateSelectedScript').value = previousSelection;
             saveNameInput.value = previousSelection;
             return;
         }
@@ -2610,7 +2645,6 @@
         scriptSelect.value = '';
         currentBadge.textContent = '(nuovo)';
         btnUpdate.disabled = true;
-        document.getElementById('updateSelectedScript').value = '';
     }
 
     updateDensityButtonLabel();
@@ -2621,12 +2655,10 @@
     if (preselected && preselected !== '(nuovo)') {
         scriptSelect.value = preselected;
         btnUpdate.disabled = false;
-        document.getElementById('updateSelectedScript').value = preselected;
         saveNameInput.value = preselected;
     } else {
         scriptSelect.value = '';
         btnUpdate.disabled = true;
-        document.getElementById('updateSelectedScript').value = '';
     }
 
     // ── Connessioni Oracle ────────────────────────────────────────────────────────
@@ -2634,7 +2666,7 @@
         return (activeConnectionIdInput.value || '').trim();
     }
 
-    function setActiveConnectionId(connectionId) {
+
         activeConnectionIdInput.value = connectionId || '';
     }
 
@@ -2735,10 +2767,6 @@
         if (btnUpdate) {
             btnUpdate.disabled = !activeEditor.selectedScript;
         }
-        const updateSelectedScript = document.getElementById('updateSelectedScript');
-        if (updateSelectedScript) {
-            updateSelectedScript.value = activeEditor.selectedScript || '';
-        }
         renderEditorTabs(key);
     }
 
@@ -2770,10 +2798,6 @@
         }
         if (btnUpdate) {
             btnUpdate.disabled = !target.selectedScript;
-        }
-        const updateSelectedScript = document.getElementById('updateSelectedScript');
-        if (updateSelectedScript) {
-            updateSelectedScript.value = target.selectedScript || '';
         }
         syncBindParamsFromSql();
         hideSuggestions();
