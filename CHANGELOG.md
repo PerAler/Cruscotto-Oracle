@@ -2,6 +2,16 @@
 
 Tutte le modifiche rilevanti a questo progetto sono documentate in questo file.
 
+## [1.4.2] - 2026-06-17
+### Added
+- Editor SQL (pagina editor): pulsante `Stop` per interrompere l'elaborazione in corso sulla connessione attiva.
+- Utility: sezione **Editor SQL Rapido** collassabile con click sul titolo (stato aperto/chiuso persistito in localStorage).
+
+### Changed
+- Editor SQL (pagina editor): `SELECT` senza clausola `WHERE` eseguite con limite automatico `ROWNUM < 200`.
+- Utility: sezione **Schedulazioni Attive** estesa con colonne **Stato** e **Running**.
+- Scheduler runtime: tracciamento stato job (`IN ATTESA`, `IN ESECUZIONE`, `ATTIVA`) e durata dell'ultima esecuzione.
+
 ## [1.4.1] - 2026-06-16
 ### Fixed
 - Editor SQL: parametri bind preservati al cambio SQL/tab; esclusi token `:x` dentro stringhe e commenti.

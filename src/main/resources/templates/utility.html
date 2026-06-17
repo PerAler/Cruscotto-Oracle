@@ -410,8 +410,17 @@
         <p th:if="${procedures.isEmpty()}">Nessun file SQL trovato nella cartella configurata (<strong>app.sql.root-dir</strong>, default <strong>sql</strong>).</p>
     </section>
 
-    <section class="card">
-        <h2>Editor SQL Rapido</h2>
+    <section class="card" id="quickSqlEditorCard">
+        <h2 id="quickSqlEditorToggle"
+            role="button"
+            tabindex="0"
+            aria-expanded="true"
+            aria-controls="quickSqlEditorBody"
+            style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none">
+            <span>Editor SQL Rapido</span>
+            <span id="quickSqlEditorToggleIcon" aria-hidden="true">▼</span>
+        </h2>
+        <div id="quickSqlEditorBody">
         <p class="param-help">Suggerimenti keyword SQL attivi: premi <strong>Tab</strong> per accettare il suggerimento.</p>
 
         <div class="form-block">
@@ -470,6 +479,7 @@
         </div>
 
         <textarea id="selectedScriptSql" hidden th:text="${!procedures.isEmpty() ? procedures[0].sqlText() : ''}"></textarea>
+        </div>
     </section>
 
     <section class="card">
@@ -604,6 +614,9 @@
         var sqlApplyLine = document.getElementById("sqlApplyLine");
         var toggleBetaMode = document.getElementById("toggleBetaMode");
         var sqlActiveLine = document.getElementById("sqlActiveLine");
+        var quickSqlEditorToggle = document.getElementById("quickSqlEditorToggle");
+        var quickSqlEditorBody = document.getElementById("quickSqlEditorBody");
+        var quickSqlEditorToggleIcon = document.getElementById("quickSqlEditorToggleIcon");
         var SQL_KEYWORDS = [
             "SELECT", "FROM", "WHERE", "GROUP", "BY", "ORDER", "HAVING", "DISTINCT",
             "WITH", "AS", "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "OUTER", "ON",
@@ -621,6 +634,33 @@
         // Stable mode: force classic editor to avoid preview click misalignment.
         var betaEnabled = false;
         localStorage.setItem(SQL_BETA_MODE_KEY, "false");
+        var QUICK_SQL_COLLAPSED_KEY = "cruscotto.utility.quickSqlEditorCollapsed." + storageScope;
+
+        function applyQuickSqlEditorCollapsed(collapsed) {
+            if (!quickSqlEditorToggle || !quickSqlEditorBody) {
+                return;
+            }
+            quickSqlEditorBody.hidden = collapsed;
+            quickSqlEditorToggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+            if (quickSqlEditorToggleIcon) {
+                quickSqlEditorToggleIcon.textContent = collapsed ? "▶" : "▼";
+            }
+        }
+
+        if (quickSqlEditorToggle && quickSqlEditorBody) {
+            applyQuickSqlEditorCollapsed(localStorage.getItem(QUICK_SQL_COLLAPSED_KEY) === "true");
+            quickSqlEditorToggle.addEventListener("click", function () {
+                var collapsed = !quickSqlEditorBody.hidden;
+                applyQuickSqlEditorCollapsed(collapsed);
+                localStorage.setItem(QUICK_SQL_COLLAPSED_KEY, collapsed ? "true" : "false");
+            });
+            quickSqlEditorToggle.addEventListener("keydown", function (event) {
+                if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    quickSqlEditorToggle.click();
+                }
+            });
+        }
 
         function setBusy() {
             if (isBusy) {
