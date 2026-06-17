@@ -9,10 +9,10 @@
     --line: #d6ccb8;
 }
 
-/* ── Barra Engineering ───────────────────────────────────────────────────── */
+/* ── Barra Engage ────────────────────────────────────────────────────────── */
 .eng-topbar {
-    background: #ffffff;
-    border-bottom: 3px solid #E30613;
+    background: #0d0d0d;
+    border-bottom: none;
     padding: 0 1.5rem;
     height: 44px;
     display: flex;
@@ -21,22 +21,23 @@
     position: sticky;
     top: 0;
     z-index: 200;
-    box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+    box-shadow: 0 1px 8px rgba(0,0,0,0.5);
 }
 .eng-topbar img {
-    height: 26px;
+    height: 28px;
     width: auto;
 }
 .eng-topbar-divider {
     width: 1px;
     height: 22px;
-    background: #d0d0d0;
+    background: rgba(255,255,255,0.2);
     margin: 0 0.25rem;
 }
 .eng-topbar-app {
     font-size: 0.78rem;
-    color: #555;
-    letter-spacing: 0.02em;
+    color: rgba(255,255,255,0.65);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
 }
 
 * {
