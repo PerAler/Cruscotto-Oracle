@@ -8,6 +8,7 @@ import com.example.cruscotto.service.OracleSchemaService;
 import com.example.cruscotto.service.QueryOutputHtmlService;
 import com.example.cruscotto.service.ScheduledExecutionService;
 import com.example.cruscotto.service.SqlProcedureCatalogService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
@@ -58,6 +59,7 @@ public class DashboardController {
     private final ExecutionLogService executionLogService;
     private final QueryOutputHtmlService queryOutputHtmlService;
     private final OracleConnectionManager connectionManager;
+    private final ObjectMapper objectMapper;
     private final List<String> applications;
     private final String defaultApplication;
     private final String runtimePid;
@@ -70,6 +72,7 @@ public class DashboardController {
                                ExecutionLogService executionLogService,
                                QueryOutputHtmlService queryOutputHtmlService,
                                OracleConnectionManager connectionManager,
+                               ObjectMapper objectMapper,
                                @Value("${app.target-applications:ALER}") String configuredApplications,
                                @Value("${app.default-application:ALER}") String defaultApplication) {
         this.catalogService = catalogService;
@@ -79,6 +82,7 @@ public class DashboardController {
         this.executionLogService = executionLogService;
         this.queryOutputHtmlService = queryOutputHtmlService;
         this.connectionManager = connectionManager;
+        this.objectMapper = objectMapper;
         this.applications = Arrays.stream(configuredApplications.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isBlank())
@@ -731,16 +735,20 @@ public class DashboardController {
         model.addAttribute("runtimePid", runtimePid);
         model.addAttribute("runtimeStartedAt", runtimeStartedAt);
         model.addAttribute("appVersion", APP_VERSION);
-        List<Map<String, Object>> savedProfileMaps = connectionManager.listSavedProfiles().stream()
-                .map(p -> {
-                    Map<String, Object> m = new LinkedHashMap<>();
-                    m.put("label", p.label());
-                    m.put("connectionTarget", p.connectionTarget());
-                    m.put("username", p.username());
-                    m.put("schema", p.schema());
-                    return m;
-                }).toList();
-        model.addAttribute("savedProfilesJson", savedProfileMaps);
+        try {
+            List<Map<String, Object>> savedProfileMaps = connectionManager.listSavedProfiles().stream()
+                    .map(p -> {
+                        Map<String, Object> m = new LinkedHashMap<>();
+                        m.put("label", p.label());
+                        m.put("connectionTarget", p.connectionTarget());
+                        m.put("username", p.username());
+                        m.put("schema", p.schema());
+                        return m;
+                    }).toList();
+            model.addAttribute("savedProfilesJsonStr", objectMapper.writeValueAsString(savedProfileMaps));
+        } catch (Exception e) {
+            model.addAttribute("savedProfilesJsonStr", "[]");
+        }
         return "editor";
     }
 
