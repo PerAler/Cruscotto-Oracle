@@ -245,6 +245,7 @@
         .btn:disabled { opacity: 0.45; cursor: default; filter: none; transform: none; }
 
         .btn-run  { background: var(--accent); color: #fff; }
+        .btn-stop { background: #b91c1c; color: #fff; }
         .btn-save { background: var(--ok); color: #fff; }
         .btn-upd  { background: var(--warm); color: #fff; }
         .btn-sec  { background: #e8e2d8; color: var(--ink); }
@@ -1197,6 +1198,7 @@
                 <span class="spin-inline" id="runSpinner"></span>
                 ▶ Esegui
             </button>
+            <button class="btn btn-stop" id="btnStop" type="button" disabled>■ Stop</button>
             <button class="btn btn-sec" id="btnFormatSql" type="button" title="Formatta il testo SQL/PL-SQL con indentazione e keyword uppercase">⟳ Formatta SQL/PL-SQL</button>
             <button class="btn btn-upd" id="btnCompileObject" type="button" title="Compila il sorgente Oracle corrente">⚙ Compila oggetto</button>
             <div class="spacer"></div>
@@ -1258,6 +1260,7 @@
     const currentBadge    = document.getElementById('currentScriptBadge');
     const ajaxMsg         = document.getElementById('ajaxMsg');
     const btnRun          = document.getElementById('btnRun');
+    const btnStop         = document.getElementById('btnStop');
     const runSpinner      = document.getElementById('runSpinner');
     const btnLoad         = document.getElementById('btnLoad');
     const btnReloadCatalog= document.getElementById('btnReloadCatalog');
@@ -1320,6 +1323,9 @@
     let suggestContext = null;
     let savedConnectionProfiles = [];
     let connectionEditorState = {};
+    let currentRunAbortController = null;
+    let currentRunConnectionId = null;
+    let cancellationRequested = false;
 
     // ── Numeri di riga ───────────────────────────────────────────────────────
     function updateLineNumbers() {
@@ -2121,17 +2127,26 @@
         }
 
         setRunning(true);
+        cancellationRequested = false;
         hideMsg();
         resultPanel.style.display = 'none';
+
+        const connectionId = getActiveConnectionId();
+        currentRunConnectionId = connectionId;
+        currentRunAbortController = new AbortController();
 
         const fd = new FormData();
         fd.append('sqlText',    sql);
         fd.append('queryLabel', queryLabelInput.value);
         fd.append('queryParams', queryParams.value);
-        fd.append('connectionId', getActiveConnectionId());
+        fd.append('connectionId', connectionId);
 
         try {
-            const resp = await fetch('/editor/execute', { method: 'POST', body: fd });
+            const resp = await fetch('/editor/execute', {
+                method: 'POST',
+                body: fd,
+                signal: currentRunAbortController.signal
+            });
             if (!resp.ok) throw new Error('HTTP ' + resp.status);
             const data = await resp.json();
 
@@ -2149,11 +2164,44 @@
                 showMsg(data.message, false);
             }
         } catch (err) {
-            showMsg('Errore di comunicazione: ' + err.message, false);
+            if (err && err.name === 'AbortError') {
+                showMsg('Esecuzione interrotta.', false);
+            } else {
+                showMsg('Errore di comunicazione: ' + err.message, false);
+            }
         } finally {
+            currentRunAbortController = null;
+            currentRunConnectionId = null;
+            cancellationRequested = false;
             setRunning(false);
         }
     });
+
+    if (btnStop) {
+        btnStop.addEventListener('click', async () => {
+            if (!currentRunConnectionId) {
+                return;
+            }
+            btnStop.disabled = true;
+            cancellationRequested = true;
+            try {
+                const fd = new FormData();
+                fd.append('connectionId', currentRunConnectionId);
+                const resp = await fetch('/editor/cancel', { method: 'POST', body: fd });
+                if (!resp.ok) {
+                    throw new Error('HTTP ' + resp.status);
+                }
+                const data = await resp.json();
+                showMsg(data.message || 'Interruzione richiesta.', Boolean(data.ok));
+            } catch (err) {
+                showMsg('Errore interruzione: ' + err.message, false);
+            } finally {
+                if (cancellationRequested && currentRunAbortController) {
+                    currentRunAbortController.abort();
+                }
+            }
+        });
+    }
 
     // ── Salva nuovo script ───────────────────────────────────────────────────
     btnSave.addEventListener('click', () => {
@@ -2401,6 +2449,9 @@
 
     function setRunning(busy) {
         btnRun.disabled = busy;
+        if (btnStop) {
+            btnStop.disabled = !busy;
+        }
         runSpinner.style.display = busy ? 'inline-block' : 'none';
         document.body.classList.toggle('is-busy', busy);
     }

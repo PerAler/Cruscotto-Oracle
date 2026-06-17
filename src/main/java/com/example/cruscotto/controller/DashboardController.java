@@ -789,6 +789,24 @@ public class DashboardController {
         return result;
     }
 
+    @PostMapping(value = "/editor/cancel", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public Map<String, Object> editorCancel(
+            @RequestParam(value = "connectionId", required = false) String connectionId) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        try {
+            boolean cancelled = executorService.cancelRunningExecution(connectionId);
+            result.put("ok", true);
+            result.put("message", cancelled
+                    ? "Richiesta di interruzione inviata alla query in esecuzione."
+                    : "Nessuna elaborazione attiva da interrompere.");
+        } catch (Exception ex) {
+            result.put("ok", false);
+            result.put("message", ex.getMessage());
+        }
+        return result;
+    }
+
     @PostMapping(value = "/editor/compile", produces = MediaType.APPLICATION_JSON_VALUE)
     @ResponseBody
     public Map<String, Object> editorCompile(

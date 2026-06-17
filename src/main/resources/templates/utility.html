@@ -479,6 +479,8 @@
             <tr>
                 <th>Procedura</th>
                 <th>Tipo</th>
+                <th>Stato</th>
+                <th>Running</th>
                 <th>Pianificazione</th>
                 <th>Parametri</th>
             </tr>
@@ -487,11 +489,13 @@
             <tr th:each="job : ${jobs}">
                 <td th:text="${job.procedureName()}"></td>
                 <td th:text="${job.scheduleType()}"></td>
+                <td th:text="${job.statusLabel()}"></td>
+                <td th:text="${job.runningTimeLabel()}"></td>
                 <td th:text="${job.scheduleExpression()}"></td>
                 <td th:text="${job.parameters()}"></td>
             </tr>
             <tr th:if="${jobs.isEmpty()}">
-                <td colspan="3">Nessuna schedulazione attiva.</td>
+                <td colspan="6">Nessuna schedulazione attiva.</td>
             </tr>
             </tbody>
         </table>
