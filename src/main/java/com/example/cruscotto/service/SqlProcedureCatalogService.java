@@ -153,6 +153,9 @@ public class SqlProcedureCatalogService {
             if (!sqlFile.startsWith(targetDir)) {
                 throw new IllegalArgumentException("Percorso file non valido");
             }
+            if (!Files.exists(sqlFile)) {
+                throw new IllegalArgumentException("Lo script selezionato non appartiene alla connessione attiva.");
+            }
 
             String content = normalizedSql.endsWith("\n") ? normalizedSql : normalizedSql + System.lineSeparator();
             Files.createDirectories(sqlFile.getParent());

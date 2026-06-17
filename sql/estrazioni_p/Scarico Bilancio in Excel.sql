@@ -433,4 +433,3 @@ v_from:=q'[  FROM estrazioni.bilancio_cons c,
     aler.ExcelGen.closeContext(ctxId);
 
 end;
-

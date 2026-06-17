@@ -142,5 +142,3 @@ begin
 end;
 
 --edit bilancio_query;
-
-
