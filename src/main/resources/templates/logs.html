@@ -14,6 +14,14 @@
         <div class="eng-topbar-divider"></div>
         <span class="eng-topbar-app">Cruscotto Oracle</span>
     </div>
+    <div class="eng-topbar-center">
+        <p class="hero-runtime" th:classappend="' state-' + ${robotState}">
+            Istanza PID <strong th:text="${runtimePid}"></strong>
+            avviata alle
+            <strong th:text="${#temporals.format(runtimeStartedAt, 'dd/MM/yyyy HH:mm:ss')}"></strong>
+            · v<strong th:text="${appVersion}"></strong>
+        </p>
+    </div>
     <div class="eng-topbar-right">
         <svg width="44" height="44" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"
              style="flex-shrink:0"
@@ -61,11 +69,6 @@
 <header class="hero">
     <h1 style="margin:0">Log Totali</h1>
     <p>Vista completa dei log di esecuzione in finestra dedicata.</p>
-    <p>
-        Istanza PID <strong th:text="${runtimePid}"></strong>
-        avviata alle
-        <strong th:text="${#temporals.format(runtimeStartedAt, 'dd/MM/yyyy HH:mm:ss')}"></strong>
-    </p>
 </header>
 
 <main class="layout">
