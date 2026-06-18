@@ -206,22 +206,13 @@
 </head>
 <body>
 <nav class="eng-topbar">
-    <img src="/engage-logo.jpg" alt="engage">
-    <div class="eng-topbar-divider"></div>
-    <span class="eng-topbar-app">Cruscotto Oracle</span>
-</nav>
-<div class="bg-shape shape-a"></div>
-<div class="bg-shape shape-b"></div>
-<div id="busyOverlay" class="busy-overlay" aria-hidden="true">
-    <div class="busy-box" role="status" aria-live="polite">
-        <span class="busy-spinner" aria-hidden="true"></span>
-        <p>Elaborazione in corso...</p>
+    <div class="eng-topbar-left">
+        <img src="/engage-logo.jpg" alt="engage">
+        <div class="eng-topbar-divider"></div>
+        <span class="eng-topbar-app">Cruscotto Oracle</span>
     </div>
-</div>
-
-<header class="hero">
-    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:0.5rem">
-        <svg width="78" height="78" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"
+    <div class="eng-topbar-right">
+        <svg width="44" height="44" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"
              style="flex-shrink:0"
              class="robot-icon"
              th:classappend="' state-' + ${robotState}">
@@ -250,15 +241,27 @@
             <path d="M38 74 Q28 86 36 98" class="spark"/>
             <path d="M160 60 Q176 76 164 92" class="spark" style="animation-delay:0.45s"/>
         </svg>
-        <div class="hero-copy">
-            <h1 class="hero-title" th:classappend="' state-' + ${robotState}">Cruscotto Oracle</h1>
+        <div class="eng-topbar-brand-copy">
+            <span class="hero-title" th:classappend="' state-' + ${robotState}">Cruscotto Oracle</span>
             <span class="robot-status-label"
                   th:classappend="' state-' + ${robotState}"
                   th:text="${robotState == 'db-offline' ? 'Robot offline: DB KO' : (robotState == 'script-error' ? 'Robot in allarme: script KO' : 'Robot operativo: DB OK')}">
                 Robot operativo: DB OK
             </span>
         </div>
+        <span class="eng-topbar-page">Pagina: Utility</span>
     </div>
+</nav>
+<div class="bg-shape shape-a"></div>
+<div class="bg-shape shape-b"></div>
+<div id="busyOverlay" class="busy-overlay" aria-hidden="true">
+    <div class="busy-box" role="status" aria-live="polite">
+        <span class="busy-spinner" aria-hidden="true"></span>
+        <p>Elaborazione in corso...</p>
+    </div>
+</div>
+
+<header class="hero">
     <p class="hero-subtitle" th:classappend="' state-' + ${robotState}">Esegui script SQL da file, passa parametri e pianifica job con cron.</p>
     <p class="hero-runtime" th:classappend="' state-' + ${robotState}">
         Istanza PID <strong th:text="${runtimePid}"></strong>

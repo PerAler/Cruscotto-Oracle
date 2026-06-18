@@ -981,16 +981,13 @@
 </head>
 <body>
 <nav class="eng-topbar">
-    <img src="/engage-logo.jpg" alt="engage">
-    <div class="eng-topbar-divider"></div>
-    <span class="eng-topbar-app">Cruscotto Oracle</span>
-</nav>
-<div class="bg-shape shape-a"></div>
-<div class="bg-shape shape-b"></div>
-
-<header class="hero">
-    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:0.5rem">
-        <svg width="78" height="78" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"
+    <div class="eng-topbar-left">
+        <img src="/engage-logo.jpg" alt="engage">
+        <div class="eng-topbar-divider"></div>
+        <span class="eng-topbar-app">Cruscotto Oracle</span>
+    </div>
+    <div class="eng-topbar-right">
+        <svg width="44" height="44" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"
              style="flex-shrink:0"
              class="robot-icon"
              th:classappend="' state-' + ${robotState}">
@@ -1019,15 +1016,21 @@
             <path d="M38 74 Q28 86 36 98" class="spark"/>
             <path d="M160 60 Q176 76 164 92" class="spark" style="animation-delay:0.45s"/>
         </svg>
-        <div class="hero-copy">
-            <h1 class="hero-title" th:classappend="' state-' + ${robotState}">Cruscotto Oracle</h1>
+        <div class="eng-topbar-brand-copy">
+            <span class="hero-title" th:classappend="' state-' + ${robotState}">Cruscotto Oracle</span>
             <span class="robot-status-label"
                   th:classappend="' state-' + ${robotState}"
                   th:text="${robotState == 'db-offline' ? 'Robot offline: DB KO' : (robotState == 'script-error' ? 'Robot in allarme: script KO' : 'Robot operativo: DB OK')}">
                 Robot operativo: DB OK
             </span>
         </div>
+        <span class="eng-topbar-page">Pagina: Editor</span>
     </div>
+</nav>
+<div class="bg-shape shape-a"></div>
+<div class="bg-shape shape-b"></div>
+
+<header class="hero">
     <p class="hero-subtitle" th:classappend="' state-' + ${robotState}">
         Esegui script SQL da file, passa parametri e pianifica job con cron.
         · Connessione attiva: <strong id="headerActiveConnectionLabel" th:text="${activeConnectionLabel != null and !activeConnectionLabel.isBlank() ? activeConnectionLabel : 'Nessuna'}">Nessuna</strong>
@@ -1152,7 +1155,9 @@
                         th:selected="${proc.name() == selectedScript}"></option>
             </select>
             <button class="btn btn-sec" id="btnLoad" type="button">Carica ▼</button>
+            <button class="btn btn-sec" id="btnOpenScriptFile" type="button" title="Apri script da file locale">📂 Apri file</button>
             <button class="btn btn-sec" id="btnReloadCatalog" type="button" title="Ricarica catalogo SQL da disco">⟳ Catalogo</button>
+            <input id="scriptFileInput" type="file" accept=".sql,.pls,.pkb,.pks,.prc,.fnc,.txt" style="display:none">
         </div>
 
         <div class="query-cursor-hint">
@@ -1259,6 +1264,8 @@
     const btnStop         = document.getElementById('btnStop');
     const runSpinner      = document.getElementById('runSpinner');
     const btnLoad         = document.getElementById('btnLoad');
+    const btnOpenScriptFile = document.getElementById('btnOpenScriptFile');
+    const scriptFileInput = document.getElementById('scriptFileInput');
     const btnReloadCatalog= document.getElementById('btnReloadCatalog');
     const btnCompileObject = document.getElementById('btnCompileObject');
     const btnNewEditor    = document.getElementById('btnNewEditor');
@@ -1278,9 +1285,9 @@
     const btnToggleColumnWrap = document.getElementById('btnToggleColumnWrap');
     const activeConnectionIdInput = document.getElementById('activeConnectionId');
     const headerActiveConnectionLabel = document.getElementById('headerActiveConnectionLabel');
-    const headerRobotIcon = document.querySelector('header.hero .robot-icon');
-    const headerHeroTitle = document.querySelector('header.hero .hero-title');
-    const headerStatusLabel = document.querySelector('header.hero .robot-status-label');
+    const headerRobotIcon = document.querySelector('.eng-topbar .robot-icon');
+    const headerHeroTitle = document.querySelector('.eng-topbar .hero-title');
+    const headerStatusLabel = document.querySelector('.eng-topbar .robot-status-label');
     const headerSubtitle = document.querySelector('header.hero .hero-subtitle');
     const headerRuntime = document.querySelector('header.hero .hero-runtime');
     const connectionTabs = document.getElementById('connectionTabs');
@@ -1945,6 +1952,63 @@
                 saveCurrentConnectionDraft();
             })
             .catch(err => showMsg('Errore caricamento script: ' + err, false));
+    });
+
+    function inferScriptNameFromFile(fileName) {
+        const rawName = (fileName || '').trim();
+        if (!rawName) {
+            return '';
+        }
+        return rawName.replace(/\.[^/.\\]+$/, '').trim();
+    }
+
+    btnOpenScriptFile.addEventListener('click', () => {
+        const connectionId = getActiveConnectionId();
+        if (!connectionId) {
+            showMsg('Apri una connessione Oracle prima di caricare uno script da file.', false);
+            return;
+        }
+        scriptFileInput.value = '';
+        scriptFileInput.click();
+    });
+
+    scriptFileInput.addEventListener('change', (event) => {
+        const connectionId = getActiveConnectionId();
+        if (!connectionId) {
+            scriptFileInput.value = '';
+            showMsg('Apri una connessione Oracle prima di caricare uno script da file.', false);
+            return;
+        }
+        const file = event.target && event.target.files ? event.target.files[0] : null;
+        if (!file) {
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+            const sqlText = typeof reader.result === 'string' ? reader.result : '';
+            const inferredName = inferScriptNameFromFile(file.name || '');
+            sqlEditor.value = sqlText;
+            scriptSelect.value = '';
+            queryLabelInput.value = inferredName || 'Script locale';
+            saveNameInput.value = inferredName || '';
+            currentBadge.textContent = inferredName || '(nuovo)';
+            btnUpdate.disabled = true;
+            setSelectedSchemaObject('', '');
+            updateLineNumbers();
+            sqlEditor.selectionStart = 0;
+            sqlEditor.selectionEnd = 0;
+            syncBindParamsFromSql();
+            hideSuggestions();
+            hideMsg();
+            saveCurrentConnectionDraft(connectionId);
+            showMsg('File caricato nell editor corrente: ' + (file.name || 'script locale'), true);
+            sqlEditor.focus();
+        };
+        reader.onerror = () => {
+            showMsg('Errore lettura file locale.', false);
+        };
+        reader.readAsText(file, 'UTF-8');
+        scriptFileInput.value = '';
     });
 
     // ── Ricarica catalogo ────────────────────────────────────────────────────

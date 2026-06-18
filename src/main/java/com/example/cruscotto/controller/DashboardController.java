@@ -165,18 +165,23 @@ public class DashboardController {
     public String errors(@RequestParam(value = "successMessage", required = false) String successMessage,
                          @RequestParam(value = "errorMessage", required = false) String errorMessage,
                          Model model) {
-        List<com.example.cruscotto.model.ExecutionLogEntry> allErrors = executionLogService.latest()
+        List<com.example.cruscotto.model.ExecutionLogEntry> latestLogs = executionLogService.latest();
+        List<com.example.cruscotto.model.ExecutionLogEntry> allErrors = latestLogs
                 .stream()
                 .filter(e -> "KO".equals(e.status()))
                 .toList();
         List<ErrorViewModel> errorViews = allErrors.stream()
             .map(e -> new ErrorViewModel(e, extractCausedByErrorSection(e.stackTrace())))
             .toList();
+        boolean dbConnected = isDatabaseConnected();
+        String robotState = resolveRobotState(dbConnected, errorMessage, latestLogs);
 
         model.addAttribute("allErrors", allErrors);
         model.addAttribute("errorViews", errorViews);
         model.addAttribute("successMessage", successMessage);
         model.addAttribute("errorMessage", errorMessage);
+        model.addAttribute("robotState", robotState);
+        model.addAttribute("appVersion", APP_VERSION);
         model.addAttribute("runtimePid", runtimePid);
         model.addAttribute("runtimeStartedAt", runtimeStartedAt);
         return "errors";
@@ -233,7 +238,8 @@ public class DashboardController {
     @GetMapping("/logs")
     public String logs(@RequestParam(value = "status", required = false) String status,
                        Model model) {
-        List<com.example.cruscotto.model.ExecutionLogEntry> allLogs = executionLogService.latest();
+        List<com.example.cruscotto.model.ExecutionLogEntry> latestLogs = executionLogService.latest();
+        List<com.example.cruscotto.model.ExecutionLogEntry> allLogs = latestLogs;
         String requestedStatus = (status == null) ? "" : status.trim().toUpperCase();
         String statusFilter;
 
@@ -254,6 +260,8 @@ public class DashboardController {
 
         model.addAttribute("allLogs", allLogs);
         model.addAttribute("logStatusFilter", statusFilter);
+        model.addAttribute("robotState", resolveRobotState(isDatabaseConnected(), null, latestLogs));
+        model.addAttribute("appVersion", APP_VERSION);
         model.addAttribute("runtimePid", runtimePid);
         model.addAttribute("runtimeStartedAt", runtimeStartedAt);
         return "logs";
