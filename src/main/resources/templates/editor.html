@@ -1530,30 +1530,34 @@
 
     function getExecutableStatementAtCursor() {
         const source = sqlEditor.value || '';
-        const cursor = Math.max(0, Math.min(sqlEditor.selectionStart || 0, source.length));
+        // Se il focus non è sulla textarea, usa il cursore salvato nell'editor attivo
+        let rawCursor = 0;
+        if (document.activeElement === sqlEditor) {
+            rawCursor = sqlEditor.selectionStart || 0;
+        } else {
+            const doc = getActiveEditorDocument(getActiveConnectionId());
+            rawCursor = doc ? (doc.cursorPosition || 0) : 0;
+        }
+        const cursor = Math.max(0, Math.min(rawCursor, source.length));
         const statements = parseOracleStatements(source);
 
         if (!statements.length) {
             const trimmed = source.trim();
-            return trimmed ? {
-                startOffset: 0,
-                endOffset: source.length,
-                sqlText: trimmed
-            } : null;
+            return trimmed ? { startOffset: 0, endOffset: source.length, sqlText: trimmed } : null;
         }
 
-        const exact = statements.find((statement) => cursor >= statement.startOffset && cursor <= statement.endOffset);
-        if (exact) {
-            return exact;
-        }
+        // Regola: lo statement del cursore è quello il cui range [startOffset … endOffset(;)]
+        // contiene il cursore. Il carattere ; appartiene allo statement che lo termina.
+        // Dopo l'ultimo ; → restituisce l'ultimo statement (nessun successivo disponibile).
+        const found = statements.find(s => cursor >= s.startOffset && cursor <= s.endOffset);
+        if (found) return found;
 
-        for (let i = statements.length - 1; i >= 0; i--) {
-            if (statements[i].startOffset <= cursor) {
-                return statements[i];
-            }
-        }
+        return statements[statements.length - 1];
+    }
 
-        return statements[0];
+    /** Restituisce il documento editor attivo (se disponibile). */
+    function getActiveEditorDoc() {
+        return getActiveEditorDocument(getActiveConnectionId());
     }
 
     function getEffectiveSqlText() {
