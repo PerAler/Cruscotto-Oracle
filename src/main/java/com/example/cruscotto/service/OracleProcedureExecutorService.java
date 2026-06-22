@@ -413,7 +413,8 @@ public class OracleProcedureExecutorService {
 
     private String sanitizeSql(String sqlText) {
         return sqlText
-                .replaceAll("(?m)^\\s*/\\s*$", "")
+                .replaceAll("(?m)^\\s*/\\s*$", "")  // rimuove righe con solo /
+                .replaceAll(";\\s*$", "")            // rimuove ; finale (invalido in JDBC/subquery)
                 .trim();
     }
 
