@@ -1318,7 +1318,7 @@
     const RESULT_COLUMN_WRAP_KEY = 'cruscotto.result.columnWrap';
     const SCHEMA_SIDEBAR_COLLAPSED_KEY = 'cruscotto.schemaSidebarCollapsed';
     const DEFAULT_EDITOR_ID = 'editor-1';
-    const QUERY_TERMINATOR_LINE = /^\s*\/\s*$/;
+    // il terminatore di statement è il punto e virgola (standard SQL)
     let resultDensity = localStorage.getItem(RESULT_DENSITY_KEY) || 'comfortable';
     let resultColumnWrap = localStorage.getItem(RESULT_COLUMN_WRAP_KEY) === 'true';
 
@@ -1459,108 +1459,69 @@
 
     function parseOracleStatements(sqlText) {
         const source = sqlText || '';
-        if (!source.trim()) {
-            return [];
-        }
+        if (!source.trim()) return [];
 
         const statements = [];
-        const lines = source.split('\n');
-        let offset = 0;
+        let i = 0;
         let statementStart = 0;
         let inBlockComment = false;
         let inSingleQuote = false;
         let inQQuote = false;
         let qQuoteCloser = '';
 
-        lines.forEach((line) => {
-            const lineStart = offset;
-            const lineEnd = lineStart + line.length;
-            const trimmed = line.trim();
-            const isTerminator = QUERY_TERMINATOR_LINE.test(trimmed)
-                && !inBlockComment
-                && !inSingleQuote
-                && !inQQuote;
+        while (i < source.length) {
+            const current = source[i];
+            const next    = source[i + 1];
+            const third   = source[i + 2];
 
-            if (isTerminator) {
-                const statementSql = source.substring(statementStart, lineStart).trim();
-                if (statementSql) {
-                    statements.push({
-                        startOffset: statementStart,
-                        endOffset: lineStart,
-                        sqlText: statementSql
-                    });
-                }
-                statementStart = Math.min(source.length, lineEnd + 1);
-                offset = lineEnd + 1;
-                return;
+            if (inBlockComment) {
+                if (current === '*' && next === '/') { inBlockComment = false; i++; }
+                i++; continue;
             }
-
-            for (let i = 0; i < line.length; i++) {
-                const current = line.charAt(i);
-                const next = line.charAt(i + 1);
-                const third = line.charAt(i + 2);
-
-                if (inBlockComment) {
-                    if (current === '*' && next === '/') {
-                        inBlockComment = false;
-                        i++;
-                    }
-                    continue;
-                }
-
-                if (inSingleQuote) {
-                    if (current === '\'') {
-                        if (next === '\'') {
-                            i++;
-                        } else {
-                            inSingleQuote = false;
-                        }
-                    }
-                    continue;
-                }
-
-                if (inQQuote) {
-                    if (current === qQuoteCloser && next === '\'') {
-                        inQQuote = false;
-                        qQuoteCloser = '';
-                        i++;
-                    }
-                    continue;
-                }
-
-                if (current === '-' && next === '-') {
-                    break;
-                }
-
-                if (current === '/' && next === '*') {
-                    inBlockComment = true;
-                    i++;
-                    continue;
-                }
-
-                if ((current === 'q' || current === 'Q') && next === '\'' && third) {
-                    inQQuote = true;
-                    qQuoteCloser = matchingQQuoteDelimiter(third);
-                    i += 2;
-                    continue;
-                }
-
+            if (inSingleQuote) {
                 if (current === '\'') {
-                    inSingleQuote = true;
+                    if (next === '\'') { i++; } else { inSingleQuote = false; }
                 }
+                i++; continue;
+            }
+            if (inQQuote) {
+                if (current === qQuoteCloser && next === '\'') { inQQuote = false; qQuoteCloser = ''; i++; }
+                i++; continue;
             }
 
-            offset = lineEnd + 1;
-        });
+            // commento a linea: salta fino a fine riga
+            if (current === '-' && next === '-') {
+                while (i < source.length && source[i] !== '\n') i++;
+                continue;
+            }
+            // commento a blocco
+            if (current === '/' && next === '*') { inBlockComment = true; i += 2; continue; }
+            // Q-quote Oracle
+            if ((current === 'q' || current === 'Q') && next === '\'' && third) {
+                inQQuote = true;
+                qQuoteCloser = matchingQQuoteDelimiter(third);
+                i += 3; continue;
+            }
+            if (current === '\'') { inSingleQuote = true; i++; continue; }
 
+            // ; — terminatore di statement
+            if (current === ';') {
+                const statementSql = source.substring(statementStart, i).trim();
+                if (statementSql) {
+                    statements.push({ startOffset: statementStart, endOffset: i, sqlText: statementSql });
+                }
+                statementStart = i + 1;
+                i++; continue;
+            }
+
+            i++;
+        }
+
+        // ultimo statement senza ;
         if (statementStart < source.length) {
             const statementSql = source.substring(statementStart).trim();
             if (statementSql) {
-                statements.push({
-                    startOffset: statementStart,
-                    endOffset: source.length,
-                    sqlText: statementSql
-                });
+                statements.push({ startOffset: statementStart, endOffset: source.length, sqlText: statementSql });
             }
         }
 
@@ -1611,11 +1572,6 @@
             if (sql.startsWith('/*')) {
                 const endComment = sql.indexOf('*/');
                 sql = endComment >= 0 ? sql.substring(endComment + 2).trimStart() : '';
-                continue;
-            }
-            if (QUERY_TERMINATOR_LINE.test(sql.split('\n', 1)[0].trim())) {
-                const newline = sql.indexOf('\n');
-                sql = newline >= 0 ? sql.substring(newline + 1).trimStart() : '';
                 continue;
             }
             if (sql.startsWith(';')) {
