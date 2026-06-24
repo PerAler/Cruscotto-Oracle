@@ -412,9 +412,24 @@ public class OracleProcedureExecutorService {
     }
 
     private String sanitizeSql(String sqlText) {
-        return sqlText
-                .replaceAll(";\\s*$", "")  // rimuove ; finale (invalido in JDBC/subquery)
-                .trim();
+        String trimmed = sqlText == null ? "" : sqlText.trim();
+        if (trimmed.isEmpty()) {
+            return "";
+        }
+        // Per blocchi PL/SQL (BEGIN/DECLARE) il ; finale di END; è parte valida dello script.
+        if (isPlsqlScript(trimmed)) {
+            return trimmed;
+        }
+        // Per SQL singoli via JDBC il ; finale non è necessario e può causare errori.
+        return trimmed.replaceAll(";\\s*$", "");
+    }
+
+    private boolean isPlsqlScript(String sql) {
+        String upper = stripCommentsAndTrim(sql);
+        if (upper.startsWith("BEGIN") || upper.startsWith("DECLARE")) {
+            return true;
+        }
+        return upper.matches("^CREATE\\s+(OR\\s+REPLACE\\s+)?(PROCEDURE|FUNCTION|PACKAGE|PACKAGE\\s+BODY|TRIGGER|TYPE|TYPE\\s+BODY)\\b.*");
     }
 
     /** Converte un'eccezione in una stringa di stack trace. */

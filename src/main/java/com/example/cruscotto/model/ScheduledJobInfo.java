@@ -19,6 +19,9 @@ public record ScheduledJobInfo(String procedureName,
         if ("PENDING".equalsIgnoreCase(status)) {
             return "IN ATTESA";
         }
+        if ("ERROR".equalsIgnoreCase(status)) {
+            return "ERRORE";
+        }
         return "ATTIVA";
     }
 

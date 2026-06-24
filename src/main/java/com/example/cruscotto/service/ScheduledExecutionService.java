@@ -1,11 +1,15 @@
 package com.example.cruscotto.service;
 
 import com.example.cruscotto.model.ScheduledJobInfo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -16,6 +20,9 @@ import java.util.concurrent.atomic.AtomicReference;
 
 @Service
 public class ScheduledExecutionService {
+    private static final Logger log = LoggerFactory.getLogger(ScheduledExecutionService.class);
+    private static final DateTimeFormatter LOCAL_DATETIME_LABEL =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private final TaskScheduler taskScheduler;
     private final OracleProcedureExecutorService executorService;
@@ -70,7 +77,7 @@ public class ScheduledExecutionService {
             jobs.put(procedureName, new ScheduledJobInfo(
                     procedureName,
                     "ONCE",
-                    runAt.toString(),
+                    runAt.atZone(ZoneId.systemDefault()).format(LOCAL_DATETIME_LABEL),
                     safeParams,
                     "PENDING",
                     null,
@@ -99,9 +106,13 @@ public class ScheduledExecutionService {
                                            boolean removeAfterRun,
                                            AtomicReference<ScheduledFuture<?>> ownFutureRef) {
         Instant startedAt = Instant.now();
+        boolean success = false;
         markRunning(procedureName, startedAt);
         try {
             executorService.runProcedure(procedureName, params);
+            success = true;
+        } catch (Exception ex) {
+            log.error("Errore esecuzione schedulata {}: {}", procedureName, ex.getMessage(), ex);
         } finally {
             long durationMillis = Math.max(0, java.time.Duration.between(startedAt, Instant.now()).toMillis());
             synchronized (this) {
@@ -111,11 +122,28 @@ public class ScheduledExecutionService {
                         futures.remove(procedureName);
                         jobs.remove(procedureName);
                     }
-                } else {
+                } else if (success) {
                     markIdle(procedureName, durationMillis);
+                } else {
+                    markError(procedureName, durationMillis);
                 }
             }
         }
+    }
+
+    private synchronized void markError(String procedureName, Long lastDurationMillis) {
+        ScheduledJobInfo current = jobs.get(procedureName);
+        if (current == null) {
+            return;
+        }
+        jobs.put(procedureName, new ScheduledJobInfo(
+                current.procedureName(),
+                current.scheduleType(),
+                current.scheduleExpression(),
+                current.parameters(),
+                "ERROR",
+                null,
+                lastDurationMillis != null ? lastDurationMillis : current.lastDurationMillis()));
     }
 
     private synchronized void markRunning(String procedureName, Instant startedAt) {

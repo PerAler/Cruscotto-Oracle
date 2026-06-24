@@ -327,6 +327,24 @@ public class DashboardController {
         return redirectToDashboard(name, "Schedulazione rimossa per " + name, null);
     }
 
+    @GetMapping(value = "/api/schedules", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public List<Map<String, Object>> schedulesSnapshot() {
+        return scheduledExecutionService.listJobs().stream()
+                .map(job -> {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("procedureName", job.procedureName());
+                    row.put("scheduleType", job.scheduleType());
+                    row.put("status", job.status());
+                    row.put("statusLabel", job.statusLabel());
+                    row.put("runningTimeLabel", job.runningTimeLabel());
+                    row.put("scheduleExpression", job.scheduleExpression());
+                    row.put("parameters", job.parameters() == null ? "{}" : job.parameters().toString());
+                    return row;
+                })
+                .toList();
+    }
+
     @PostMapping("/catalog/reload")
     public String reloadCatalog(
             @RequestParam(value = "selectedProcedure", required = false) String selectedProcedure,

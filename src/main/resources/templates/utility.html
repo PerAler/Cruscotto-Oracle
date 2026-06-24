@@ -505,7 +505,7 @@
                 <th>Parametri</th>
             </tr>
             </thead>
-            <tbody>
+            <tbody id="scheduleJobsBody" data-empty-colspan="6">
             <tr th:each="job : ${jobs}">
                 <td th:text="${job.procedureName()}"></td>
                 <td th:text="${job.scheduleType()}"></td>
@@ -1389,6 +1389,60 @@
             });
         }
 
+    })();
+</script>
+<script>
+    (function () {
+        var jobsBody = document.getElementById("scheduleJobsBody");
+        if (!jobsBody) {
+            return;
+        }
+
+        function escapeHtml(value) {
+            return String(value == null ? "" : value)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#39;");
+        }
+
+        function renderJobs(jobs) {
+            if (!Array.isArray(jobs) || !jobs.length) {
+                var colspan = Number(jobsBody.getAttribute("data-empty-colspan")) || 6;
+                jobsBody.innerHTML = '<tr><td colspan="' + colspan + '">Nessuna schedulazione attiva.</td></tr>';
+                return;
+            }
+
+            jobsBody.innerHTML = jobs.map(function (job) {
+                var statusClass = String(job.status || "").toUpperCase();
+                return "<tr>"
+                    + "<td>" + escapeHtml(job.procedureName) + "</td>"
+                    + "<td>" + escapeHtml(job.scheduleType) + "</td>"
+                    + "<td class=\"status-" + escapeHtml(statusClass.toLowerCase()) + "\">" + escapeHtml(job.statusLabel) + "</td>"
+                    + "<td>" + escapeHtml(job.runningTimeLabel) + "</td>"
+                    + "<td>" + escapeHtml(job.scheduleExpression) + "</td>"
+                    + "<td>" + escapeHtml(job.parameters) + "</td>"
+                    + "</tr>";
+            }).join("");
+        }
+
+        function pollSchedules() {
+            fetch("/api/schedules", { cache: "no-store" })
+                .then(function (resp) {
+                    if (!resp.ok) {
+                        throw new Error("HTTP " + resp.status);
+                    }
+                    return resp.json();
+                })
+                .then(renderJobs)
+                .catch(function () {
+                    // lascia l'ultima vista disponibile
+                });
+        }
+
+        pollSchedules();
+        window.setInterval(pollSchedules, 5000);
     })();
 </script>
 </body>
