@@ -2211,6 +2211,17 @@
         }
     });
 
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'F9') {
+            return;
+        }
+        if (btnRun.disabled) {
+            return;
+        }
+        e.preventDefault();
+        btnRun.click();
+    });
+
     if (btnStop) {
         btnStop.addEventListener('click', async () => {
             if (!currentRunConnectionId) {
